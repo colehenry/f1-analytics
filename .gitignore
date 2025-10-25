@@ -1,0 +1,206 @@
+# F1 Analytics - Git Ignore File
+# This file tells git which files/folders to NOT track in version control
+
+.claude/
+.python-version
+CLAUDE.md
+
+# Personal learning docs (not for public repo)
+docs/
+
+# ============================================================================
+# Python (Backend)
+# ============================================================================
+
+# Virtual environment (your isolated Python packages)
+# NEVER commit this - each developer creates their own venv
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Python cache files (auto-generated when Python runs)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# MyPy (type checking)
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# ============================================================================
+# JavaScript / Node.js (Frontend)
+# ============================================================================
+
+# Dependencies (NEVER commit - can be 100,000+ files)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js build output
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Production build
+build/
+dist/
+
+# ============================================================================
+# Environment Variables (CRITICAL - NEVER COMMIT SECRETS!)
+# ============================================================================
+
+# These files contain secrets like database passwords, API keys
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# ============================================================================
+# Database
+# ============================================================================
+
+# Local database files (if using SQLite for testing)
+*.db
+*.sqlite
+*.sqlite3
+
+# PostgreSQL dumps
+*.sql
+*.dump
+
+# ============================================================================
+# Docker
+# ============================================================================
+
+# Docker volumes (database data stored here locally)
+# Comment this out if you want to persist data in git (usually bad idea)
+docker-volumes/
+
+# ============================================================================
+# IDE / Editor
+# ============================================================================
+
+# VS Code (ignore all settings - personal project)
+.vscode/
+
+# PyCharm
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ============================================================================
+# Testing
+# ============================================================================
+
+coverage/
+.nyc_output/
+
+# ============================================================================
+# Logs
+# ============================================================================
+
+logs/
+*.log
+
+# ============================================================================
+# Temporary files
+# ============================================================================
+
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# ============================================================================
+# FastF1 Cache (downloaded F1 data)
+# ============================================================================
+
+# FastF1 caches telemetry data locally to avoid re-downloading
+# You might want to commit this OR add to .gitignore depending on team size
+# For learning project: ignore it (can be several GB)
+cache/
+fastf1_cache/
+*.pkl
+*.pickle
+
+# ============================================================================
+# Generated Documentation
+# ============================================================================
+
+# If you generate API docs automatically
+docs/_build/
+site/
+
+# ============================================================================
+# What TO Commit (Explicitly Listed for Clarity)
+# ============================================================================
+
+# ✅ Source code (.py, .ts, .tsx, .js, .jsx)
+# ✅ Configuration files (package.json, requirements.txt, tsconfig.json)
+# ✅ Docker config (docker-compose.yml, Dockerfile)
+# ✅ Database migrations (alembic/versions/*.py)
+# ✅ Documentation (docs/*.md, README.md)
+# ✅ Tests (tests/*.py, __tests__/*.ts)
+# ✅ .gitignore (this file!)
+# ✅ VS Code shared settings (.vscode/settings.json)
+
+# ============================================================================
+# Notes on Security
+# ============================================================================
+
+# NEVER commit:
+# - Passwords
+# - API keys
+# - Database credentials
+# - Access tokens
+# - Private keys
+# - .env files
+
+# If you accidentally commit a secret:
+# 1. Remove it from git history (git filter-branch or BFG Repo Cleaner)
+# 2. Rotate the secret immediately (change password, regenerate API key)
+# 3. Pushing to GitHub with secrets triggers security alerts
