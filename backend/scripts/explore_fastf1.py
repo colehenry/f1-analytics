@@ -100,7 +100,7 @@ def explore_race_results(year: int = 2024, round_number: int = 2):
     return results
 
 
-def explore_laps_data(year: int = 2024, round_number: int = 1):
+def explore_laps_data(year: int = 2024, round_number: int = 2):
     """
     Fetch and display lap times for a race.
 

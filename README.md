@@ -1,238 +1,148 @@
 # F1 Analytics
 
-A full-stack web application for visualizing Formula 1 telemetry, race data, and historical statistics. Built as a learning project to master modern web development while creating something useful for F1 fans.
+A full-stack web application for visualizing Formula 1 race data, telemetry, and statistics. Personal learning project to master modern web development.
 
-**Current Status:** 🚧 In Development - Database schema implemented, data ingestion in progress
+**Current Status:** ✅ Working MVP - Displays 2024 race winners with data from FastF1
+
+---
+
+## What It Does
+
+**Currently Working:**
+- Fetches and stores complete 2024 F1 season data from FastF1 API
+- Displays race winners in a responsive grid
+- Shows which winners also had fastest lap
+- Auto-generated API documentation at `/docs`
+
+**Database:**
+- PostgreSQL with 5 tables: drivers, teams, circuits, races, race_results
+- ~480 race results from 2024 season (20 drivers × 24 races)
+- Proper foreign key relationships and data integrity
+
+**Data Sources:**
+- FastF1 library (2018+) for modern telemetry and race data
+- Jolpica F1 API (1950+) for historical data (planned)
 
 ---
 
 ## Tech Stack
 
-**Frontend:**
-- React 18 + Next.js 14 (App Router)
-- TypeScript
-- Tailwind CSS
-- Plotly.js/Recharts for visualizations
-- React Query for data fetching
-
-**Backend:**
-- FastAPI (Python 3.11)
-- SQLAlchemy ORM
-- PostgreSQL 15+
-- Alembic (migrations)
-- APScheduler (automated updates)
-
-**Data Sources:**
-- FastF1 library (telemetry, 2018+)
-- Jolpica F1 API (historical data, 1950+)
-
-**Infrastructure:**
-- Docker (PostgreSQL container)
-- VS Code + Biome.js + Black
+**Frontend:** Next.js 14 (App Router) • TypeScript • Tailwind CSS
+**Backend:** FastAPI • Python 3.11 • SQLAlchemy
+**Database:** PostgreSQL 15
+**Infrastructure:** Docker • Alembic migrations
 
 ---
 
-## Project Structure
+## Quick Start
 
-```
-f1-analytics/
-├── frontend/           # Next.js React app
-├── backend/            # FastAPI Python app
-├── docs/               # Documentation
-│   ├── PROJECT_OVERVIEW.md    # Architecture & tech explanations
-│   ├── SETUP.md               # Installation guide
-│   ├── FEATURES.md            # Feature roadmap
-│   ├── TIMELINE.md            # Learning timeline
-│   ├── API_DESIGN.md          # API endpoints & database schema
-│   ├── SCHEMA_DESIGN.md       # Database schema design decisions
-│   └── LEARNING_LOG.md        # Personal learning notes
-├── docker-compose.yml  # PostgreSQL config
-└── README.md           # This file
+**Prerequisites:** Docker, Node.js 20, Python 3.11
+
+```bash
+# Start PostgreSQL
+docker-compose up -d
+
+# Backend setup
+cd backend
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+python -m scripts.ingest_season  # Takes 10-20 min first time
+
+# Start backend
+uvicorn app.main:app --reload
+# → http://localhost:8000 (API docs at /docs)
+
+# Frontend setup (new terminal)
+cd frontend
+npm install
+npm run dev
+# → http://localhost:3000
 ```
 
 ---
 
-## Getting Started
+## Current Features
 
-### Prerequisites
+✅ **Data Ingestion**
+- Script pulls 2024 F1 data from FastF1
+- Idempotent (safe to run multiple times)
+- Automatically detects fastest laps
+- Handles mid-season driver/team changes
 
-- macOS (instructions are Mac-specific)
-- Docker Desktop
-- Node.js 20 LTS (via nvm)
-- Python 3.11
-- VS Code
+✅ **API**
+- `GET /api/races/2024` - Returns race winners
+- Auto-generated Swagger docs
+- Pydantic validation
 
-### Setup Instructions
-
-**Complete setup guide**: See [`docs/SETUP.md`](docs/SETUP.md)
-
-1. **Install tools** (Docker, Node.js, Python - see SETUP.md)
-2. **Clone repository**:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/f1-analytics.git
-   cd f1-analytics
-   ```
-
-3. **Start PostgreSQL**:
-   ```bash
-   docker-compose up -d
-   ```
-
-4. **Set up backend**:
-   ```bash
-   cd backend
-   python3.11 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   alembic upgrade head
-   uvicorn app.main:app --reload
-   ```
-
-5. **Set up frontend**:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-
-6. **Visit**:
-   - Frontend: http://localhost:3000
-   - Backend API docs: http://localhost:8000/docs
+✅ **Frontend**
+- Responsive race winner cards
+- Server-side rendering
+- Tailwind CSS styling
 
 ---
 
-## Current Progress
+## What's Next
 
-### ✅ Completed
-- PostgreSQL database running in Docker
-- FastAPI backend structure with health endpoint
-- SQLAlchemy ORM models for all core entities
-- Alembic migrations configured and applied
-- Database schema with 5 tables: `drivers`, `teams`, `circuits`, `races`, `race_results`
-- Foreign key relationships with referential integrity
-- FastF1 exploration script for understanding data structure
+**Immediate:**
+- Full race results (all 20 drivers per race)
+- Qualifying results
+- Championship standings
 
-### 🚧 In Progress
-- Data ingestion scripts to populate database with FastF1 data
+**Phase 2:**
+- Lap time visualizations
+- Driver/team statistics
+- Multiple seasons (2023, 2022, etc.)
+- Telemetry data (speed, throttle, brake)
 
-### 📋 Next Up
-- First API endpoint: `/api/races/{season}`
-- Frontend Next.js setup
-- Race results visualization
-
----
-
-## Documentation
-
-This project is heavily documented as a learning resource:
-
-- **[PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)**: Explains architecture, tech choices, data flow
-- **[SETUP.md](docs/SETUP.md)**: Step-by-step environment setup with explanations
-- **[FEATURES.md](docs/FEATURES.md)**: Feature roadmap with checkboxes
-- **[TIMELINE.md](docs/TIMELINE.md)**: Month-by-month learning plan
-- **[API_DESIGN.md](docs/API_DESIGN.md)**: API endpoints and database schema
-- **[SCHEMA_DESIGN.md](docs/SCHEMA_DESIGN.md)**: Database schema design decisions (NEW!)
-- **[LEARNING_LOG.md](docs/LEARNING_LOG.md)**: Space for personal notes and learnings
+**Phase 3:**
+- Historical data (1950-2017)
+- Driver comparisons
+- Predictive analytics
 
 ---
 
-## Features
+## How It Works
 
-### MVP (Phase 1) - In Progress
-- [x] Database schema designed and implemented
-- [ ] Ingest race data from FastF1
-- [ ] Display race results for 2024 season
-- [ ] Show lap times for each race
-- [ ] Basic data visualizations (line charts)
+```
+FastF1 API → ingest_season.py → PostgreSQL → FastAPI → Next.js → Browser
+```
 
-### Planned Features
-- [ ] Telemetry visualization (speed, throttle, brake)
-- [ ] Driver comparison tool
-- [ ] Historical race data (1950-2024)
-- [ ] Championship standings
-- [ ] Automated weekly data updates
-- [ ] Machine learning predictions
+**Data Flow:**
+1. `ingest_season.py` fetches race data from FastF1
+2. Stores in PostgreSQL (normalized schema)
+3. FastAPI serves data via REST endpoints
+4. Next.js frontend fetches and displays
 
-See [`docs/FEATURES.md`](docs/FEATURES.md) for complete roadmap.
+**Key Files:**
+- `backend/scripts/ingest_season.py` - Data ingestion
+- `backend/app/routers/races.py` - API endpoints
+- `frontend/app/page.tsx` - Home page
 
 ---
 
 ## Development
 
-### Running locally
-
-**Start all services:**
 ```bash
-# Terminal 1: PostgreSQL
-docker-compose up
-
-# Terminal 2: Backend
-cd backend && source venv/bin/activate && uvicorn app.main:app --reload
-
-# Terminal 3: Frontend
-cd frontend && npm run dev
+# Start all services
+docker-compose up -d                    # PostgreSQL
+cd backend && uvicorn app.main:app --reload  # Backend
+cd frontend && npm run dev               # Frontend
 ```
 
-### Running tests
-
-**Backend:**
+**Useful Commands:**
 ```bash
-cd backend
-pytest
-```
+# Re-ingest data
+cd backend && python -m scripts.ingest_season
 
-**Frontend:**
-```bash
-cd frontend
-npm test
+# Database migrations
+cd backend && alembic upgrade head
+
+# View database
+docker exec -it f1-analytics-db psql -U f1admin -d f1_analytics
 ```
 
 ---
 
-## Learning Goals
-
-This project is designed to teach:
-- Full-stack web development
-- React + Next.js with TypeScript
-- FastAPI + SQLAlchemy
-- PostgreSQL database design
-- Docker basics
-- API design and consumption
-- Data visualization
-- Working with external APIs
-
-See [`docs/TIMELINE.md`](docs/TIMELINE.md) for the complete learning roadmap.
-
----
-
-## Data Sources
-
-**FastF1** - F1 telemetry and timing data (2018+)
-- Lap times
-- Speed, throttle, brake telemetry
-- Qualifying results
-- Practice sessions
-- Sprint races
-
-**Jolpica F1 API** - Historical race data (1950+)
-- Race results
-- Championship standings
-- Driver/team information
-
----
-
-## License
-
-MIT
-
----
-
-## Acknowledgments
-
-- FastF1 library maintainers
-- Jolpica F1 API
-- F1 community for data access
-
----
-
-**Status**: Active development | Learning project | Not affiliated with Formula 1
+**Learning Project** • Not affiliated with Formula 1 • MIT License

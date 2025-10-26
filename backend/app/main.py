@@ -37,7 +37,6 @@ async def root():
     }
 
 
-# TODO: Add routers here later
-# Example:
-# from app.routers import races
-# app.include_router(races.router, prefix="/api", tags=["races"])
+from app.routers import races
+
+app.include_router(races.router, prefix="/api/races", tags=["races"])
