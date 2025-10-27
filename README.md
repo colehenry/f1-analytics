@@ -2,21 +2,22 @@
 
 A full-stack web application for visualizing Formula 1 race data, telemetry, and statistics. Personal learning project to master modern web development.
 
-**Current Status:** ✅ Working MVP - Displays 2024 race winners with data from FastF1
+**Current Status:** ✅ Working MVP - Season podium display with year selector (2022-2024 data)
 
 ---
 
 ## What It Does
 
 **Currently Working:**
-- Fetches and stores complete 2024 F1 season data from FastF1 API
-- Displays race winners in a responsive grid
-- Shows which winners also had fastest lap
+- Fetches and stores 2022-2024 F1 season data from FastF1 API
+- Home page: Displays 2024 race winners
+- `/seasons` page: Shows top 3 finishers for each race with year selector
+- Team colors, driver photos, fastest lap indicators
 - Auto-generated API documentation at `/docs`
 
 **Database:**
 - PostgreSQL with 5 tables: drivers, teams, circuits, races, race_results
-- ~480 race results from 2024 season (20 drivers × 24 races)
+- ~1,440 race results (3 seasons × 20 drivers × 24 races)
 - Proper foreign key relationships and data integrity
 
 **Data Sources:**
