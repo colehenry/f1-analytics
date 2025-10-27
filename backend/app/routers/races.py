@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, distinct, desc
 from typing import List
 
 from app.database import get_db
@@ -8,6 +8,21 @@ from app.models import Race, RaceResult, Driver, Team
 from app.schemas.race import RaceWinnerResponse
 
 router = APIRouter()
+
+
+@router.get("/seasons", response_model=List[int])
+async def get_available_seasons(db: AsyncSession = Depends(get_db)):
+    """
+    Return a List[int] with all the seasons for which we currently have complete (or partial for current season) data for in the db.
+    Example: [2024, 2023, 2022]
+    """
+
+    query = select(Race.season).distinct().order_by(Race.season.desc())
+
+    result = await db.execute(query)
+    seasons = result.scalars().all()
+
+    return seasons
 
 
 @router.get("/{season}", response_model=List[RaceWinnerResponse])
