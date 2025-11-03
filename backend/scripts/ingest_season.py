@@ -1,12 +1,29 @@
 """
 Season Data Ingestion Script
 
-Ingests all race data for a given F1 season into the database.
+Ingests session data (races, qualifying, sprints) for a given F1 season.
 Safe to run multiple times (idempotent) - skips existing data.
 
+Requirements:
+    - FastF1 3.6.1+ (calculates results from F1 Live Timing API)
+    - PYTHONPATH must include backend directory
+
 Usage:
-    python ingest_season.py
-    python ingest_season.py 2023  # Specific year
+    PYTHONPATH=$PWD python scripts/ingest_season.py
+    PYTHONPATH=$PWD python scripts/ingest_season.py 2023  # Specific year
+    PYTHONPATH=$PWD python scripts/ingest_season.py 2024 race,qualifying  # Specific session types
+
+Schema:
+    - sessions: year, round, session_type, event_name, date, circuit_id
+    - session_results: Universal fields (position, status) + session-specific fields
+      * Race/Sprint: grid_position, points, time_seconds, laps_completed, fastest_lap
+      * Qualifying: q1_time_seconds, q2_time_seconds, q3_time_seconds
+    - teams: Year-partitioned (unique constraint on year + name)
+    - drivers: Year-independent (driver_code unique)
+
+Note:
+    FastF1 3.6.1+ calculates results from live timing data since Ergast API
+    shutdown in 2024. Earlier versions (3.2.0) will result in NULL values.
 """
 
 import fastf1
@@ -16,8 +33,12 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 # Import our models and config
-from app.models import Driver, Team, Circuit, Race, RaceResult
+from app.models import Driver, Team, Circuit, Session, SessionResult
 from app.config import settings
+
+
+# Session types to ingest (configurable)
+DEFAULT_SESSION_TYPES = ['race', 'qualifying', 'sprint', 'sprint_qualifying']
 
 
 def get_db_session():
@@ -37,9 +58,9 @@ def ingest_circuit(db, event):
 
     Returns: circuit_id
     """
-    circuit_name = event["EventName"]
-    location = event["Location"]
-    country = event["Country"]
+    circuit_name = event.get("Location")  # Circuit location (e.g., "Bahrain International Circuit")
+    location = event.get("Location")
+    country = event.get("Country")
 
     # Check if circuit exists by name
     circuit = db.execute(
@@ -51,45 +72,53 @@ def ingest_circuit(db, event):
         return circuit.id
     else:
         print(f"  + Creating circuit: {circuit_name}")
-        circuit = Circuit(name=circuit_name, location=location, country=country)
+        circuit = Circuit(
+            name=circuit_name,
+            location=location,
+            country=country,
+            track_length_km=None  # FastF1 doesn't provide this directly
+        )
         db.add(circuit)
         db.commit()
         db.refresh(circuit)
         return circuit.id
 
 
-def ingest_race(db, event, circuit_id, season_year):
+def ingest_session_metadata(db, event, circuit_id, year, session_type, session_date):
     """
-    Ingest race if it doesn't exist.
+    Ingest session metadata if it doesn't exist.
 
-    Returns: (race_id, should_process_results)
+    Returns: (session_id, should_process_results)
     """
     round_num = event["RoundNumber"]
-    race_name = event["EventName"]
-    race_date = event["EventDate"]
+    event_name = event["EventName"]
 
-    # Check if race exists
-    race = db.execute(
-        select(Race).where(Race.season == season_year, Race.round == round_num)
+    # Check if session exists
+    existing_session = db.execute(
+        select(Session).where(
+            Session.year == year,
+            Session.round == round_num,
+            Session.session_type == session_type
+        )
     ).scalar_one_or_none()
 
-    if race:
-        print(f"  ✓ Race exists: {season_year} R{round_num}")
-        return race.id, False  # Don't process results
+    if existing_session:
+        print(f"  ✓ Session exists: {year} R{round_num} {session_type}")
+        return existing_session.id, False  # Don't process results
     else:
-        print(f"  + Creating race: {season_year} R{round_num} - {race_name}")
-        race = Race(
-            season=season_year,
+        print(f"  + Creating session: {year} R{round_num} {session_type} - {event_name}")
+        session = Session(
+            year=year,
             round=round_num,
-            name=race_name,
-            date=race_date.date() if hasattr(race_date, "date") else race_date,
-            event_date=race_date,
+            session_type=session_type,
+            event_name=event_name,
+            date=session_date.date() if hasattr(session_date, "date") else session_date,
             circuit_id=circuit_id,
         )
-        db.add(race)
+        db.add(session)
         db.commit()
-        db.refresh(race)
-        return race.id, True  # Process results
+        db.refresh(session)
+        return session.id, True  # Process results
 
 
 def ingest_driver(db, driver_data):
@@ -101,30 +130,26 @@ def ingest_driver(db, driver_data):
 
     Returns: driver_id
     """
-    abbr = driver_data["Abbreviation"]
+    driver_code = driver_data["Abbreviation"]
 
-    # Check if driver exists by abbreviation
+    # Check if driver exists by code
     driver = db.execute(
-        select(Driver).where(Driver.abbreviation == abbr)
+        select(Driver).where(Driver.driver_code == driver_code)
     ).scalar_one_or_none()
 
     if driver:
-        # Update headshot URL to keep it fresh
-        driver.default_headshot_url = driver_data["HeadshotUrl"]
-        db.commit()
         return driver.id
     else:
-        print(f"    + New driver: {driver_data['FullName']}")
+        print(f"    + New driver: {driver_data['FullName']} ({driver_code})")
         driver = Driver(
             full_name=driver_data["FullName"],
-            abbreviation=abbr,
+            driver_code=driver_code,
             driver_number=(
                 int(driver_data["DriverNumber"])
                 if driver_data["DriverNumber"]
                 else None
             ),
-            country_code=driver_data["CountryCode"],
-            default_headshot_url=driver_data["HeadshotUrl"],
+            country_code=driver_data.get("CountryCode"),
         )
         db.add(driver)
         db.commit()
@@ -132,62 +157,110 @@ def ingest_driver(db, driver_data):
         return driver.id
 
 
-def ingest_team(db, team_data):
+def ingest_team(db, team_data, year):
     """
-    Ingest team if it doesn't exist.
+    Ingest team for a specific year if it doesn't exist.
 
     Args:
         team_data: Row from session.results DataFrame
+        year: Season year
 
     Returns: team_id
     """
     team_name = team_data["TeamName"]
+    team_color = team_data.get("TeamColor", "")
 
-    # Check if team exists by name
-    team = db.execute(select(Team).where(Team.name == team_name)).scalar_one_or_none()
+    # Remove '#' from color if present
+    if team_color and team_color.startswith('#'):
+        team_color = team_color[1:]
+
+    # Check if team exists for this year
+    team = db.execute(
+        select(Team).where(Team.year == year, Team.name == team_name)
+    ).scalar_one_or_none()
 
     if team:
         return team.id
     else:
-        print(f"    + New team: {team_name}")
-        team = Team(name=team_name, team_color=team_data["TeamColor"])
+        print(f"    + New team for {year}: {team_name}")
+        team = Team(
+            year=year,
+            name=team_name,
+            team_color=team_color if team_color else None
+        )
         db.add(team)
         db.commit()
         db.refresh(team)
         return team.id
 
 
-def ingest_race_results(db, session, race_id, season_year, round_num):
+def safe_float(val):
+    """Convert value to float, handling NaN and None"""
+    import pandas as pd
+    if pd.isna(val):
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def safe_int(val):
+    """Convert value to int, handling NaN and None"""
+    import pandas as pd
+    if pd.isna(val):
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def timedelta_to_seconds(td):
+    """Convert pandas Timedelta to seconds (float)"""
+    if td is None:
+        return None
+    try:
+        return td.total_seconds()
+    except (AttributeError, TypeError):
+        return None
+
+
+def ingest_race_results(db, fastf1_session, session_id, year):
     """
-    Ingest all race results for a race.
+    Ingest race or sprint race results.
 
     Args:
         db: Database session
-        session: FastF1 session object (already loaded)
-        race_id: ID of the race
-        season_year: Year
-        round_num: Round number
+        fastf1_session: FastF1 session object (already loaded)
+        session_id: ID of the session in our database
+        year: Season year
     """
-    results = session.results
+    results = fastf1_session.results
     print(f"  📊 Processing {len(results)} driver results...")
 
     # Get fastest lap info from laps data
-    laps = session.laps
-    fastest_lap = laps.pick_fastest()
-    fastest_lap_driver = fastest_lap['Driver'] if fastest_lap is not None else None
+    try:
+        laps = fastf1_session.laps
+        fastest_lap = laps.pick_fastest()
+        fastest_lap_driver = fastest_lap['Driver'] if fastest_lap is not None else None
+    except Exception as e:
+        print(f"    ⚠️  Could not determine fastest lap: {e}")
+        fastest_lap_driver = None
 
     new_results = 0
     for idx, driver_result in results.iterrows():
         # Get or create driver
         driver_id = ingest_driver(db, driver_result)
 
-        # Get or create team
-        team_id = ingest_team(db, driver_result)
+        # Get or create team (year-specific)
+        team_id = ingest_team(db, driver_result, year)
 
         # Check if result already exists
         existing_result = db.execute(
-            select(RaceResult).where(
-                RaceResult.race_id == race_id, RaceResult.driver_id == driver_id
+            select(SessionResult).where(
+                SessionResult.session_id == session_id,
+                SessionResult.driver_id == driver_id
             )
         ).scalar_one_or_none()
 
@@ -197,52 +270,25 @@ def ingest_race_results(db, session, race_id, season_year, round_num):
         # Create new result
         new_results += 1
 
-        # Helper to safely convert, handling NaN
-        import pandas as pd
-
-        def safe_int(val):
-            if pd.isna(val):
-                return None
-            try:
-                return int(val)
-            except (ValueError, TypeError):
-                return None
-
-        def safe_float(val):
-            if pd.isna(val):
-                return 0.0
-            try:
-                return float(val)
-            except (ValueError, TypeError):
-                return 0.0
-
         # Check if this driver had the fastest lap
-        driver_abbr = driver_result["Abbreviation"]
-        had_fastest_lap = (fastest_lap_driver == driver_abbr) if fastest_lap_driver else False
+        driver_code = driver_result["Abbreviation"]
+        had_fastest_lap = (fastest_lap_driver == driver_code) if fastest_lap_driver else False
 
-        result = RaceResult(
-            race_id=race_id,
+        # Convert time to seconds
+        time_seconds = timedelta_to_seconds(driver_result.get("Time"))
+
+        result = SessionResult(
+            session_id=session_id,
             driver_id=driver_id,
             team_id=team_id,
-            position=safe_int(driver_result["Position"]),
-            grid_position=safe_int(driver_result["GridPosition"]),
-            points=safe_float(driver_result["Points"]),
-            status=(
-                str(driver_result["Status"])
-                if not pd.isna(driver_result["Status"])
-                else "Unknown"
-            ),
-            time=(
-                str(driver_result["Time"])
-                if not pd.isna(driver_result["Time"])
-                else None
-            ),
+            position=safe_int(driver_result.get("Position")),
+            status=str(driver_result.get("Status", "Unknown")),
+            headshot_url=driver_result.get("HeadshotUrl"),
+            grid_position=safe_int(driver_result.get("GridPosition")),
+            points=safe_float(driver_result.get("Points")),
+            laps_completed=safe_int(driver_result.get("Laps")),  # Available in FastF1 3.6+
+            time_seconds=time_seconds,
             fastest_lap=had_fastest_lap,
-            headshot_url=(
-                driver_result["HeadshotUrl"]
-                if not pd.isna(driver_result["HeadshotUrl"])
-                else None
-            ),
         )
         db.add(result)
 
@@ -250,12 +296,116 @@ def ingest_race_results(db, session, race_id, season_year, round_num):
     print(f"  ✓ Added {new_results} new results")
 
 
-def ingest_season(season_year):
+def ingest_qualifying_results(db, fastf1_session, session_id, year):
     """
-    Main function: Ingest all races for a given season.
+    Ingest qualifying or sprint qualifying results.
+
+    Args:
+        db: Database session
+        fastf1_session: FastF1 session object (already loaded)
+        session_id: ID of the session in our database
+        year: Season year
     """
+    results = fastf1_session.results
+    print(f"  📊 Processing {len(results)} qualifying results...")
+
+    new_results = 0
+    for idx, driver_result in results.iterrows():
+        # Get or create driver
+        driver_id = ingest_driver(db, driver_result)
+
+        # Get or create team (year-specific)
+        team_id = ingest_team(db, driver_result, year)
+
+        # Check if result already exists
+        existing_result = db.execute(
+            select(SessionResult).where(
+                SessionResult.session_id == session_id,
+                SessionResult.driver_id == driver_id
+            )
+        ).scalar_one_or_none()
+
+        if existing_result:
+            continue
+
+        new_results += 1
+
+        # Convert qualifying times to seconds
+        q1_time = timedelta_to_seconds(driver_result.get("Q1"))
+        q2_time = timedelta_to_seconds(driver_result.get("Q2"))
+        q3_time = timedelta_to_seconds(driver_result.get("Q3"))
+
+        result = SessionResult(
+            session_id=session_id,
+            driver_id=driver_id,
+            team_id=team_id,
+            position=safe_int(driver_result.get("Position")),
+            status=str(driver_result.get("Status", "Unknown")),
+            headshot_url=driver_result.get("HeadshotUrl"),
+            q1_time_seconds=q1_time,
+            q2_time_seconds=q2_time,
+            q3_time_seconds=q3_time,
+        )
+        db.add(result)
+
+    db.commit()
+    print(f"  ✓ Added {new_results} new qualifying results")
+
+
+def ingest_session(db, year, round_num, event, session_type_name, fastf1_session_name):
+    """
+    Ingest a single session (race, qualifying, sprint, etc.).
+
+    Args:
+        db: Database session
+        year: Season year
+        round_num: Round number
+        event: Event data from schedule
+        session_type_name: Our session type ('race', 'qualifying', 'sprint_race', 'sprint_qualifying')
+        fastf1_session_name: FastF1 session name ('Race', 'Qualifying', 'Sprint', 'Sprint Qualifying')
+    """
+    # Ingest circuit
+    circuit_id = ingest_circuit(db, event)
+
+    # Load FastF1 session data
+    print(f"  📥 Loading {fastf1_session_name} data from FastF1...")
+    try:
+        fastf1_sess = fastf1.get_session(year, round_num, fastf1_session_name)
+        fastf1_sess.load()
+
+        # Ingest session metadata
+        session_date = fastf1_sess.date if hasattr(fastf1_sess, 'date') else event.get("EventDate")
+        session_id, should_process = ingest_session_metadata(
+            db, event, circuit_id, year, session_type_name, session_date
+        )
+
+        if should_process:
+            # Ingest results based on session type
+            if session_type_name in ['race', 'sprint_race']:
+                ingest_race_results(db, fastf1_sess, session_id, year)
+            elif session_type_name in ['qualifying', 'sprint_qualifying']:
+                ingest_qualifying_results(db, fastf1_sess, session_id, year)
+        else:
+            print(f"  ⏭️  Results already exist, skipping")
+
+    except Exception as e:
+        print(f"  ❌ Error loading {fastf1_session_name} data: {e}")
+
+
+def ingest_season(season_year, session_types=None):
+    """
+    Main function: Ingest all sessions for a given season.
+
+    Args:
+        season_year: Year to ingest (e.g., 2024)
+        session_types: List of session types to ingest (defaults to all)
+    """
+    if session_types is None:
+        session_types = DEFAULT_SESSION_TYPES
+
     print(f"\n{'='*60}")
     print(f"INGESTING {season_year} SEASON")
+    print(f"Session types: {', '.join(session_types)}")
     print(f"{'='*60}\n")
 
     # Enable FastF1 cache
@@ -267,13 +417,21 @@ def ingest_season(season_year):
     # Get database session
     db = get_db_session()
 
+    # Mapping of our session types to FastF1 session names
+    SESSION_TYPE_MAP = {
+        'race': 'Race',
+        'qualifying': 'Qualifying',
+        'sprint_race': 'Sprint',
+        'sprint_qualifying': 'Sprint Qualifying',
+    }
+
     try:
         # Get season schedule
         print(f"📅 Fetching {season_year} schedule...")
         schedule = fastf1.get_event_schedule(season_year)
         print(f"   Found {len(schedule)} events\n")
 
-        # Process each race
+        # Process each race weekend
         for index, event in schedule.iterrows():
             round_num = event["RoundNumber"]
             event_name = event["EventName"]
@@ -285,30 +443,22 @@ def ingest_season(season_year):
 
             print(f"🏁 Round {round_num}: {event_name}")
 
-            # Ingest circuit
-            circuit_id = ingest_circuit(db, event)
-
-            # Ingest race
-            race_id, should_process = ingest_race(db, event, circuit_id, season_year)
-
-            if should_process:
-                # Load race session data
-                print(f"  📥 Loading race data from FastF1...")
-                try:
-                    session = fastf1.get_session(season_year, round_num, "Race")
-                    session.load()
-
-                    # Ingest results
-                    ingest_race_results(db, session, race_id, season_year, round_num)
-
-                except Exception as e:
-                    print(f"  ❌ Error loading race data: {e}")
-                    print(f"     Skipping results for this race\n")
+            # Ingest each requested session type
+            for session_type in session_types:
+                if session_type not in SESSION_TYPE_MAP:
+                    print(f"  ⚠️  Unknown session type: {session_type}, skipping")
                     continue
-            else:
-                print(f"  ⏭️  Results already exist, skipping")
 
-            print()  # Blank line
+                fastf1_session_name = SESSION_TYPE_MAP[session_type]
+                print(f"\n  🔹 {session_type.upper()}")
+
+                try:
+                    ingest_session(db, season_year, round_num, event, session_type, fastf1_session_name)
+                except Exception as e:
+                    print(f"  ❌ Failed to ingest {session_type}: {e}")
+                    continue
+
+            print()  # Blank line between events
 
         print(f"{'='*60}")
         print(f"✅ INGESTION COMPLETE!")
@@ -317,7 +467,6 @@ def ingest_season(season_year):
     except Exception as e:
         print(f"\n❌ ERROR: {e}")
         import traceback
-
         traceback.print_exc()
         db.rollback()
         raise
@@ -326,6 +475,13 @@ def ingest_season(season_year):
 
 
 if __name__ == "__main__":
-    # Default to 2024, or take from command line
+    # Parse command line arguments
     season = int(sys.argv[1]) if len(sys.argv) > 1 else 2024
-    ingest_season(season)
+
+    # Optional: specify session types (e.g., python ingest_season.py 2024 race,qualifying)
+    if len(sys.argv) > 2:
+        session_types = sys.argv[2].split(',')
+    else:
+        session_types = ['race', 'qualifying']  # Default: just race and qualifying
+
+    ingest_season(season, session_types)

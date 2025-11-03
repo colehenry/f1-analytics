@@ -11,7 +11,7 @@ from app.config import settings
 
 # Import all models so Alembic can detect them
 # This is CRITICAL - if you don't import models, Alembic won't see them!
-from app.models import Driver, Team, Circuit, Race, RaceResult
+from app.models import Driver, Team, Circuit, Session, SessionResult
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

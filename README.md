@@ -2,35 +2,37 @@
 
 A full-stack web application for visualizing Formula 1 race data, telemetry, and statistics. Personal learning project to master modern web development.
 
-**Current Status:** ✅ Working MVP - Season podium display with year selector (2022-2024 data)
+**Current Status:** ✅ Database refactored - Session-based architecture with 2024 race and qualifying data ingested
 
 ---
 
 ## What It Does
 
 **Currently Working:**
-- Fetches and stores 2022-2024 F1 season data from FastF1 API
-- Home page: Displays 2024 race winners
-- `/seasons` page: Shows top 3 finishers for each race with year selector
-- Team colors, driver photos, fastest lap indicators
+- Fetches and stores 2024 F1 season data from FastF1 3.6.1
+- Session-based architecture supporting race, qualifying, sprint, and sprint qualifying
+- Complete race results with positions, times, points, laps completed, and fastest lap tracking
+- Year-partitioned teams table to track color/name changes between seasons
 - Auto-generated API documentation at `/docs`
 
 **Database:**
-- PostgreSQL with 5 tables: drivers, teams, circuits, races, race_results
-- ~1,440 race results (3 seasons × 20 drivers × 24 races)
-- Proper foreign key relationships and data integrity
+- PostgreSQL with 5 tables: drivers, teams, circuits, sessions, session_results
+- 2024 Season ingested: 24 races + 24 qualifying sessions = 48 sessions
+- ~960 session results (48 sessions × ~20 drivers)
+- Normalized schema with proper foreign keys and data integrity
 
 **Data Sources:**
-- FastF1 library (2018+) for modern telemetry and race data
-- Jolpica F1 API (1950+) for historical data (planned)
+- FastF1 3.6.1 (2018+) - Calculates results from F1 live timing data
+- Uses official F1 API timing data (Ergast no longer available as of 2024)
 
 ---
 
 ## Tech Stack
 
 **Frontend:** Next.js 14 (App Router) • TypeScript • Tailwind CSS
-**Backend:** FastAPI • Python 3.11 • SQLAlchemy
+**Backend:** FastAPI • Python 3.11 • SQLAlchemy 2.0
 **Database:** PostgreSQL 15
+**Data:** FastF1 3.6.1 • F1 Live Timing API
 **Infrastructure:** Docker • Alembic migrations
 
 ---
@@ -49,7 +51,9 @@ python3.11 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
-python -m scripts.ingest_season  # Takes 10-20 min first time
+
+# Ingest 2024 race and qualifying data (takes ~15 min first time)
+PYTHONPATH=$PWD python scripts/ingest_season.py 2024 race,qualifying
 
 # Start backend
 uvicorn app.main:app --reload
@@ -67,39 +71,44 @@ npm run dev
 ## Current Features
 
 ✅ **Data Ingestion**
-- Script pulls 2024 F1 data from FastF1
+- Pulls 2024 F1 data from FastF1 3.6.1 using F1 Live Timing API
+- Session-based ingestion: races, qualifying, sprints, sprint qualifying
 - Idempotent (safe to run multiple times)
-- Automatically detects fastest laps
-- Handles mid-season driver/team changes
+- Automatically detects fastest laps from lap data
+- Year-partitioned teams handle color/name changes
+- Stores times as floats (seconds) for easy frontend conversion
 
-✅ **API**
-- `GET /api/races/2024` - Returns race winners
-- Auto-generated Swagger docs
-- Pydantic validation
+✅ **Database Schema**
+- **sessions**: Replaces races table, supports multiple session types per round
+- **session_results**: Unified table for race and qualifying results
+- **teams**: Year-partitioned (teams.year + teams.name unique constraint)
+- **drivers**: Year-independent with driver_code
+- **circuits**: Location and country data
 
-✅ **Frontend**
-- Responsive race winner cards
-- Server-side rendering
-- Tailwind CSS styling
+✅ **API** (Legacy endpoints, being refactored)
+- `GET /api/races/2024` - Returns race winners (old schema)
+- Auto-generated Swagger docs at `/docs`
+- Pydantic v2 validation
 
 ---
 
 ## What's Next
 
 **Immediate:**
-- Full race results (all 20 drivers per race)
-- Qualifying results
-- Championship standings
+- `/api/results` endpoint with query parameters (year, round, session_type)
+- Update frontend to use new session-based API
+- Championship standings calculation
 
 **Phase 2:**
+- Ingest sprint and sprint qualifying data for 2024
+- Add 2023, 2022 seasons (and earlier back to 2018)
 - Lap time visualizations
-- Driver/team statistics
-- Multiple seasons (2023, 2022, etc.)
-- Telemetry data (speed, throttle, brake)
+- Driver/team statistics pages
 
 **Phase 3:**
-- Historical data (1950-2017)
-- Driver comparisons
+- Telemetry data visualizations (speed, throttle, brake traces)
+- Historical data (1950-2017) from alternative sources
+- Driver head-to-head comparisons
 - Predictive analytics
 
 ---
@@ -107,19 +116,21 @@ npm run dev
 ## How It Works
 
 ```
-FastF1 API → ingest_season.py → PostgreSQL → FastAPI → Next.js → Browser
+F1 Live Timing API → FastF1 3.6.1 → ingest_season.py → PostgreSQL → FastAPI → Next.js
 ```
 
 **Data Flow:**
-1. `ingest_season.py` fetches race data from FastF1
-2. Stores in PostgreSQL (normalized schema)
-3. FastAPI serves data via REST endpoints
-4. Next.js frontend fetches and displays
+1. FastF1 fetches live timing data from official F1 API
+2. Calculates race/qualifying results from timing data (Ergast no longer available)
+3. `ingest_season.py` processes and stores in PostgreSQL (session-based schema)
+4. FastAPI serves data via REST endpoints
+5. Next.js frontend fetches and displays
 
 **Key Files:**
-- `backend/scripts/ingest_season.py` - Data ingestion
-- `backend/app/routers/races.py` - API endpoints
-- `frontend/app/page.tsx` - Home page
+- `backend/scripts/ingest_season.py` - Session data ingestion script
+- `backend/app/models/session.py` - Session model (replaces Race)
+- `backend/app/models/session_result.py` - Result model (replaces RaceResult)
+- `backend/app/schemas/result.py` - Pydantic response schemas
 
 ---
 
@@ -134,14 +145,23 @@ cd frontend && npm run dev               # Frontend
 
 **Useful Commands:**
 ```bash
-# Re-ingest data
-cd backend && python -m scripts.ingest_season
+# Ingest specific session types for a year
+cd backend
+PYTHONPATH=$PWD python scripts/ingest_season.py 2024 race
+PYTHONPATH=$PWD python scripts/ingest_season.py 2024 qualifying
+PYTHONPATH=$PWD python scripts/ingest_season.py 2024 race,qualifying,sprint_race,sprint_qualifying
 
 # Database migrations
-cd backend && alembic upgrade head
+alembic revision --autogenerate -m "Description"
+alembic upgrade head
 
 # View database
 docker exec -it f1-analytics-db psql -U f1admin -d f1_analytics
+
+# Reset database (WARNING: deletes all data)
+docker-compose down -v
+docker-compose up -d
+alembic upgrade head
 ```
 
 ---
