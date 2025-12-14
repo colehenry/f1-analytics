@@ -35,7 +35,6 @@ class Circuit(Base):
 
     # Relationships
     sessions = relationship("Session", back_populates="circuit")
-    races = relationship("Race", back_populates="circuit")  # Legacy relationship
 
     def __repr__(self):
         """String representation for debugging"""

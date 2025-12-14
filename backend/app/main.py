@@ -37,8 +37,6 @@ async def root():
     }
 
 
-from app.routers import races, podiums, season_results
+from app.routers import season_results
 
-app.include_router(races.router, prefix="/api/races", tags=["races"])
-app.include_router(podiums.router, prefix="/api/podiums", tags=["podiums"])
 app.include_router(season_results.router, prefix="/api/results", tags=["results"])
