@@ -54,7 +54,7 @@ type SessionResultsResponse = {
   results: SessionResultDetail[];
 };
 
-export default function RoundDetailPage() {
+export default function SprintDetailPage() {
   const params = useParams();
   const router = useRouter();
   const season = params.season as string;
@@ -70,7 +70,7 @@ export default function RoundDetailPage() {
       try {
         setLoading(true);
         const response = await fetch(
-          `http://localhost:8000/api/results/${season}/${round}`,
+          `http://localhost:8000/api/results/${season}/${round}/sprint`,
           {
             cache: "no-store",
           },
@@ -78,7 +78,7 @@ export default function RoundDetailPage() {
         const sessionData = await response.json();
         setData(sessionData);
       } catch (error) {
-        console.error("Failed to fetch round details:", error);
+        console.error("Failed to fetch sprint details:", error);
       } finally {
         setLoading(false);
       }
@@ -89,7 +89,7 @@ export default function RoundDetailPage() {
     return (
       <main className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-7xl mx-auto">
-          <p className="text-center text-gray-600">Loading race details...</p>
+          <p className="text-center text-gray-600">Loading sprint details...</p>
         </div>
       </main>
     );
@@ -100,7 +100,7 @@ export default function RoundDetailPage() {
       <main className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-7xl mx-auto">
           <p className="text-center text-red-600">
-            Failed to load race details.
+            Failed to load sprint details.
           </p>
         </div>
       </main>
@@ -111,7 +111,7 @@ export default function RoundDetailPage() {
     <SessionDetail
       data={data}
       season={season}
-      isSprint={false}
+      isSprint={true}
       onBack={() => router.push(`/results/${season}`)}
     />
   );

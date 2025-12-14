@@ -9,10 +9,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
-from typing import List
+from typing import List, Optional
+import math
 
 from app.database import get_db
 from app.models import Session, SessionResult, Driver, Team, Circuit
+
+
+def sanitize_float(value: Optional[float]) -> Optional[float]:
+    """Convert inf/nan float values to None for JSON serialization"""
+    if value is None:
+        return None
+    if math.isnan(value) or math.isinf(value):
+        return None
+    return value
 from app.schemas.result import (
     StandingsResponse,
     DriverStanding,
@@ -24,6 +34,26 @@ from app.schemas.result import (
 )
 
 router = APIRouter()
+
+
+@router.get("/seasons", response_model=List[int])
+async def get_available_seasons(db: AsyncSession = Depends(get_db)):
+    """
+    Get all available seasons/years that have session data.
+
+    Returns a list of years in descending order (newest first).
+    """
+    query = select(Session.year).distinct().order_by(Session.year.desc())
+
+    result = await db.execute(query)
+    seasons = [row[0] for row in result.all()]
+
+    if not seasons:
+        raise HTTPException(
+            status_code=404, detail="No seasons found"
+        )
+
+    return seasons
 
 
 @router.get("/{season}/standings", response_model=StandingsResponse)
@@ -154,7 +184,11 @@ async def get_season_rounds(season: int, db: AsyncSession = Depends(get_db)):
         .where(Session.year == season)
         .where(Session.session_type.in_(["race", "sprint_race"]))  # Only races, not qualifying
         .where(SessionResult.position.between(1, 3))  # Top 3 only
-        .order_by(Session.round, Session.session_type, SessionResult.position)
+        .order_by(
+            Session.round,
+            Session.date,  # Order by date to get sprint before race (sprint happens earlier)
+            SessionResult.position
+        )
     )
 
     result = await db.execute(query)
@@ -195,12 +229,110 @@ async def get_season_rounds(season: int, db: AsyncSession = Depends(get_db)):
     return SeasonRoundsResponse(year=season, rounds=rounds)
 
 
+@router.get("/{season}/{round}/sprint", response_model=SessionResultsResponse)
+async def get_sprint_details(
+    season: int, round: int, db: AsyncSession = Depends(get_db)
+):
+    """
+    Get full results for a specific sprint race.
+
+    Returns all drivers and their complete sprint session data.
+    Used for the /results/[season]/[round]/sprint detail page.
+    """
+
+    # Get the sprint race session for this round
+    # Use selectinload to eagerly load the circuit relationship to avoid lazy loading issues
+    session_query = (
+        select(Session)
+        .options(selectinload(Session.circuit))
+        .where(Session.year == season)
+        .where(Session.round == round)
+        .where(Session.session_type == "sprint_race")
+    )
+
+    session_result = await db.execute(session_query)
+    session = session_result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No sprint race found for season {season}, round {round}",
+        )
+
+    # Get all results for this session with driver/team info
+    results_query = (
+        select(SessionResult, Driver, Team)
+        .join(Driver, SessionResult.driver_id == Driver.id)
+        .join(Team, SessionResult.team_id == Team.id)
+        .where(SessionResult.session_id == session.id)
+        .order_by(SessionResult.position)
+    )
+
+    results = await db.execute(results_query)
+    result_rows = results.all()
+
+    # Build response
+    from app.schemas.result import (
+        SessionInfo,
+        CircuitInfo,
+        SessionResultDetail,
+        DriverInfo,
+        TeamInfo,
+    )
+
+    # Get circuit info
+    circuit = session.circuit
+
+    session_info = SessionInfo(
+        id=session.id,
+        year=session.year,
+        round=session.round,
+        session_type=session.session_type,
+        event_name=session.event_name,
+        date=session.date,
+        circuit=CircuitInfo(
+            name=circuit.name,
+            location=circuit.location,
+            country=circuit.country,
+            track_length_km=circuit.track_length_km,
+        ),
+    )
+
+    session_results = [
+        SessionResultDetail(
+            position=result.SessionResult.position,
+            status=result.SessionResult.status,
+            headshot_url=result.SessionResult.headshot_url,
+            driver=DriverInfo(
+                driver_number=result.Driver.driver_number,
+                driver_code=result.Driver.driver_code,
+                full_name=result.Driver.full_name,
+            ),
+            team=TeamInfo(
+                name=result.Team.name,
+                team_color=result.Team.team_color,
+            ),
+            grid_position=result.SessionResult.grid_position,
+            points=sanitize_float(result.SessionResult.points),
+            laps_completed=result.SessionResult.laps_completed,
+            time_seconds=sanitize_float(result.SessionResult.time_seconds),
+            fastest_lap=result.SessionResult.fastest_lap,
+            q1_time_seconds=sanitize_float(result.SessionResult.q1_time_seconds),
+            q2_time_seconds=sanitize_float(result.SessionResult.q2_time_seconds),
+            q3_time_seconds=sanitize_float(result.SessionResult.q3_time_seconds),
+        )
+        for result in result_rows
+    ]
+
+    return SessionResultsResponse(session=session_info, results=session_results)
+
+
 @router.get("/{season}/{round}", response_model=SessionResultsResponse)
 async def get_round_details(
     season: int, round: int, db: AsyncSession = Depends(get_db)
 ):
     """
-    Get full results for a specific round.
+    Get full results for a specific round (main race).
 
     Returns all drivers and their complete session data.
     Used for the /results/[season]/[round] detail page.
@@ -280,13 +412,13 @@ async def get_round_details(
                 team_color=result.Team.team_color,
             ),
             grid_position=result.SessionResult.grid_position,
-            points=result.SessionResult.points,
+            points=sanitize_float(result.SessionResult.points),
             laps_completed=result.SessionResult.laps_completed,
-            time_seconds=result.SessionResult.time_seconds,
+            time_seconds=sanitize_float(result.SessionResult.time_seconds),
             fastest_lap=result.SessionResult.fastest_lap,
-            q1_time_seconds=result.SessionResult.q1_time_seconds,
-            q2_time_seconds=result.SessionResult.q2_time_seconds,
-            q3_time_seconds=result.SessionResult.q3_time_seconds,
+            q1_time_seconds=sanitize_float(result.SessionResult.q1_time_seconds),
+            q2_time_seconds=sanitize_float(result.SessionResult.q2_time_seconds),
+            q3_time_seconds=sanitize_float(result.SessionResult.q3_time_seconds),
         )
         for result in result_rows
     ]
