@@ -127,20 +127,20 @@ export default function ResultsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gray-50 p-8">
+      <main className="min-h-screen bg-[#15151e] p-8">
         <div className="max-w-7xl mx-auto">
-          <p className="text-center text-gray-600">Loading results...</p>
+          <p className="text-center text-gray-400">Loading results...</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
+    <main className="min-h-screen bg-[#15151e] p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header with year selector */}
         <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-4xl font-bold text-gray-900">
+          <h1 className="text-4xl font-bold text-white">
             {season} Season Results
           </h1>
 
@@ -148,7 +148,7 @@ export default function ResultsPage() {
           <select
             value={season}
             onChange={(e) => handleYearChange(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-lg text-gray-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 border border-[#2a2a35] rounded-lg bg-[#1e1e28] text-lg text-white font-semibold focus:outline-none focus:ring-2 focus:ring-[#a020f0]"
           >
             {availableYears.map((year) => (
               <option key={year} value={year}>
@@ -161,13 +161,13 @@ export default function ResultsPage() {
         {/* Final Standings Section */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">
+            <h2 className="text-2xl font-bold text-white">
               {season} Final Standings
             </h2>
             <button
               type="button"
               onClick={() => setExpandedStandings(!expandedStandings)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-[#a020f0] text-white rounded-lg hover:bg-[#7209b7] transition-colors"
             >
               {expandedStandings ? "Show Top 5" : "Show All"}
             </button>
@@ -176,8 +176,8 @@ export default function ResultsPage() {
           {/* Driver and Constructor Standings Side by Side */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Driver Standings */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">
+            <div className="bg-[#1e1e28] rounded-lg border border-[#2a2a35] shadow-lg p-6">
+              <h3 className="text-xl font-bold text-white mb-4">
                 Driver Standings
               </h3>
               <div className="space-y-3">
@@ -186,10 +186,10 @@ export default function ResultsPage() {
                   .map((driver, idx) => (
                     <div
                       key={`${driver.driver_code}-${driver.team_name}-${idx}`}
-                      className="flex items-center gap-3 pb-3 border-b border-gray-100 last:border-0"
+                      className="flex items-center gap-3 pb-3 border-b border-[#2a2a35] last:border-0"
                     >
                       {/* Position */}
-                      <div className="text-2xl font-bold text-gray-400 w-8">
+                      <div className="text-2xl font-bold text-gray-500 w-8">
                         {driver.position}
                       </div>
 
@@ -201,13 +201,13 @@ export default function ResultsPage() {
                             alt={driver.full_name}
                             width={48}
                             height={48}
-                            className="rounded-full object-cover border-2 border-gray-200"
+                            className="rounded-full object-cover border-2 border-white"
                           />
                         )}
 
                       {/* Driver Info */}
                       <div className="flex-1">
-                        <div className="font-semibold text-gray-900">
+                        <div className="font-semibold text-white">
                           {driver.full_name}
                         </div>
                         <div
@@ -215,7 +215,7 @@ export default function ResultsPage() {
                           style={{
                             color: driver.team_color
                               ? `#${driver.team_color}`
-                              : "#666",
+                              : "#999",
                           }}
                         >
                           {driver.team_name}
@@ -223,7 +223,7 @@ export default function ResultsPage() {
                       </div>
 
                       {/* Points */}
-                      <div className="text-xl font-bold text-gray-900">
+                      <div className="text-xl font-bold text-white">
                         {driver.total_points}
                       </div>
                     </div>
@@ -232,8 +232,8 @@ export default function ResultsPage() {
             </div>
 
             {/* Constructor Standings */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">
+            <div className="bg-[#1e1e28] rounded-lg border border-[#2a2a35] shadow-lg p-6">
+              <h3 className="text-xl font-bold text-white mb-4">
                 Constructor Standings
               </h3>
               <div className="space-y-3">
@@ -242,10 +242,10 @@ export default function ResultsPage() {
                   .map((team, idx) => (
                     <div
                       key={`${team.team_name}-${idx}`}
-                      className="flex items-center gap-3 pb-3 border-b border-gray-100 last:border-0"
+                      className="flex items-center gap-3 pb-3 border-b border-[#2a2a35] last:border-0"
                     >
                       {/* Position */}
-                      <div className="text-2xl font-bold text-gray-400 w-8">
+                      <div className="text-2xl font-bold text-gray-500 w-8">
                         {team.position}
                       </div>
 
@@ -256,7 +256,7 @@ export default function ResultsPage() {
                           style={{
                             color: team.team_color
                               ? `#${team.team_color}`
-                              : "#000",
+                              : "#fff",
                           }}
                         >
                           {team.team_name}
@@ -264,7 +264,7 @@ export default function ResultsPage() {
                       </div>
 
                       {/* Points */}
-                      <div className="text-xl font-bold text-gray-900">
+                      <div className="text-xl font-bold text-white">
                         {team.total_points}
                       </div>
                     </div>
@@ -276,7 +276,7 @@ export default function ResultsPage() {
 
         {/* Races Section */}
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">All Races</h2>
+          <h2 className="text-2xl font-bold text-white mb-4">All Races</h2>
           <div className="space-y-4">
             {rounds?.rounds.map((round) => (
               <button
@@ -285,18 +285,18 @@ export default function ResultsPage() {
                 onClick={() =>
                   handleRoundClick(round.round, round.session_type)
                 }
-                className="w-full bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer text-left"
+                className="w-full bg-[#1e1e28] border border-[#2a2a35] rounded-lg shadow-lg p-6 hover:border-[#a020f0] transition-all cursor-pointer text-left"
               >
                 {/* Race Header - Horizontal */}
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#2a2a35]">
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900">
-                      <span className="text-gray-500 font-normal">
+                    <h3 className="text-xl font-bold text-white">
+                      <span className="text-gray-400 font-normal">
                         Round {round.round}
                       </span>{" "}
                       • {round.event_name}
                     </h3>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-400">
                       {round.circuit_name} •{" "}
                       {new Date(round.date).toLocaleDateString("en-US", {
                         month: "long",
@@ -306,7 +306,7 @@ export default function ResultsPage() {
                     </p>
                   </div>
                   {round.session_type === "sprint_race" && (
-                    <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                    <span className="bg-[#a020f0] text-white px-3 py-1 rounded-full text-sm font-semibold">
                       SPRINT
                     </span>
                   )}
@@ -333,13 +333,13 @@ export default function ResultsPage() {
                               alt={driver.full_name}
                               width={56}
                               height={56}
-                              className="rounded-full object-cover border-2 border-gray-200"
+                              className="rounded-full object-cover border-2 border-white"
                             />
                           )}
 
                         {/* Driver Info */}
                         <div className="flex-1">
-                          <div className="font-bold text-gray-900">
+                          <div className="font-bold text-white">
                             {driver.driver_code}
                           </div>
                           <div
@@ -347,13 +347,13 @@ export default function ResultsPage() {
                             style={{
                               color: driver.team_color
                                 ? `#${driver.team_color}`
-                                : "#666",
+                                : "#999",
                             }}
                           >
                             {driver.team_name}
                           </div>
                           {driver.fastest_lap && (
-                            <div className="text-xs text-purple-600 font-semibold">
+                            <div className="text-xs text-[#c77dff] font-semibold">
                               ⚡ Fastest Lap
                             </div>
                           )}

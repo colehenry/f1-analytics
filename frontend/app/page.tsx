@@ -34,14 +34,14 @@ export default async function Home() {
   const races = await getRaces();
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
+    <main className="min-h-screen bg-[#15151e] p-8">
       <div className="max-w-7xl mx-auto">
         {/* Page Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
+          <h1 className="text-4xl font-bold text-white mb-2">
             2024 F1 Season
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-400">
             Race winners and fastest laps
           </p>
         </div>
@@ -51,17 +51,17 @@ export default async function Home() {
           {races.map((race) => (
             <div
               key={race.round}
-              className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+              className="bg-[#1e1e28] border border-[#2a2a35] rounded-lg shadow-lg p-6 hover:border-[#a020f0] transition-all"
             >
               {/* Race Header */}
               <div className="mb-4">
-                <div className="text-sm text-gray-500 mb-1">
+                <div className="text-sm text-gray-400 mb-1">
                   Round {race.round}
                 </div>
-                <h2 className="text-xl font-bold text-gray-900 mb-2">
+                <h2 className="text-xl font-bold text-white mb-2">
                   {race.race_name}
                 </h2>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-400">
                   {new Date(race.date).toLocaleDateString('en-US', {
                     month: 'long',
                     day: 'numeric',
@@ -71,19 +71,19 @@ export default async function Home() {
               </div>
 
               {/* Winner Info */}
-              <div className="border-t border-gray-200 pt-4">
-                <div className="text-sm text-gray-500 mb-1">Winner</div>
-                <div className="font-semibold text-lg text-gray-900">
+              <div className="border-t border-[#2a2a35] pt-4">
+                <div className="text-sm text-gray-400 mb-1">Winner</div>
+                <div className="font-semibold text-lg text-white">
                   {race.winner_name}
                 </div>
-                <div className="text-sm text-gray-600 mt-1">
+                <div className="text-sm text-gray-300 mt-1">
                   {race.winner_team}
                 </div>
 
                 {/* Fastest Lap Badge */}
                 {race.winner_had_fastest_lap && (
                   <div className="mt-3">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#a020f0]/20 text-[#c77dff]">
                       ⚡ Fastest Lap
                     </span>
                   </div>

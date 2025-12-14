@@ -1,22 +1,31 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Dark mode colors inspired by F1 website */
+  --background: #15151e;
+  --foreground: #e7e7e9;
+
+  /* Purple F1 sector colors */
+  --purple-sector: #a020f0;
+  --purple-light: #c77dff;
+  --purple-dark: #7209b7;
+
+  /* Accent colors */
+  --accent-red: #e10600;
+  --card-bg: #1e1e28;
+  --card-border: #2a2a35;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-purple-sector: var(--purple-sector);
+  --color-purple-light: var(--purple-light);
+  --color-purple-dark: var(--purple-dark);
+  --color-card-bg: var(--card-bg);
+  --color-card-border: var(--card-border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

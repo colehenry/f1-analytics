@@ -79,36 +79,36 @@ export default function SessionDetail({
   const { session, results } = data;
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
+    <main className="min-h-screen bg-[#15151e] p-8">
       <div className="max-w-7xl mx-auto">
         {/* Back Button */}
         <button
           type="button"
           onClick={onBack}
-          className="mb-4 text-blue-600 hover:text-blue-800 font-semibold"
+          className="mb-4 text-[#a020f0] hover:text-[#c77dff] font-semibold transition-colors"
         >
           ← Back to {season} Results
         </button>
 
         {/* Session Header */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-[#1e1e28] border border-[#2a2a35] rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-gray-900">
+                <h1 className="text-3xl font-bold text-white">
                   {session.event_name}
                 </h1>
                 {isSprint && (
-                  <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                  <span className="bg-[#a020f0] text-white px-3 py-1 rounded-full text-sm font-semibold">
                     SPRINT RACE
                   </span>
                 )}
               </div>
-              <p className="text-lg text-gray-600">
+              <p className="text-lg text-gray-300">
                 Round {session.round} • {session.circuit.name},{" "}
                 {session.circuit.location}
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-400">
                 {new Date(session.date).toLocaleDateString("en-US", {
                   weekday: "long",
                   month: "long",
@@ -119,7 +119,7 @@ export default function SessionDetail({
             </div>
             <div className="text-right">
               {session.circuit.track_length_km && (
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-400">
                   {session.circuit.track_length_km} km
                 </div>
               )}
@@ -128,41 +128,41 @@ export default function SessionDetail({
         </div>
 
         {/* Results Table */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="bg-[#1e1e28] border border-[#2a2a35] rounded-lg shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-100 border-b-2 border-gray-200">
+              <thead className="bg-[#252530] border-b-2 border-[#2a2a35]">
                 <tr>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Pos
                   </th>
                   <th className="pl-1 pr-4 py-3"></th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Driver
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Team
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Time
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Points
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Status
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-[#2a2a35]">
                 {results.map((result) => (
                   <tr
                     key={`${result.driver.driver_code}-${result.position}`}
-                    className="hover:bg-gray-50 transition-colors"
+                    className="hover:bg-[#252530] transition-colors"
                   >
                     {/* Position */}
                     <td className="px-4 py-4 text-center">
-                      <div className="text-lg font-bold text-gray-900">
+                      <div className="text-lg font-bold text-white">
                         {result.position || "-"}
                       </div>
                     </td>
@@ -177,7 +177,7 @@ export default function SessionDetail({
                           return (
                             <span
                               className={`text-base font-bold ${
-                                change > 0 ? "text-green-600" : "text-red-600"
+                                change > 0 ? "text-green-500" : "text-red-500"
                               }`}
                             >
                               {change > 0 ? `+${change}` : change}
@@ -196,21 +196,21 @@ export default function SessionDetail({
                               alt={result.driver.full_name}
                               width={40}
                               height={40}
-                              className="rounded-full object-cover border-2 border-gray-200"
+                              className="rounded-full object-cover border-2 border-white"
                             />
                           )}
                         <div>
-                          <div className="font-semibold text-gray-900">
+                          <div className="font-semibold text-white">
                             {result.driver.full_name}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-gray-400">
                             {result.driver.driver_code}
                             {result.driver.driver_number &&
                               ` #${result.driver.driver_number}`}
                           </div>
                         </div>
                         {result.fastest_lap && (
-                          <span className="text-purple-600 font-semibold text-sm">
+                          <span className="text-[#c77dff] font-semibold text-sm">
                             ⚡
                           </span>
                         )}
@@ -224,7 +224,7 @@ export default function SessionDetail({
                         style={{
                           color: result.team.team_color
                             ? `#${result.team.team_color}`
-                            : "#000",
+                            : "#fff",
                         }}
                       >
                         {result.team.name}
@@ -233,14 +233,14 @@ export default function SessionDetail({
 
                     {/* Time */}
                     <td className="px-4 py-4 text-right">
-                      <div className="font-mono text-gray-900">
+                      <div className="font-mono text-white">
                         {formatTime(result.time_seconds, result.position === 1)}
                       </div>
                     </td>
 
                     {/* Points */}
                     <td className="px-4 py-4 text-center">
-                      <div className="font-bold text-gray-900">
+                      <div className="font-bold text-white">
                         {result.points || "-"}
                       </div>
                     </td>
@@ -250,10 +250,10 @@ export default function SessionDetail({
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-semibold ${
                           result.status === "Finished"
-                            ? "bg-green-100 text-green-800"
+                            ? "bg-green-900/50 text-green-300"
                             : result.status === "Lapped"
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-red-100 text-red-800"
+                              ? "bg-blue-900/50 text-blue-300"
+                              : "bg-red-900/50 text-red-300"
                         }`}
                       >
                         {result.status}
