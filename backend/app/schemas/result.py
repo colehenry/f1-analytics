@@ -102,3 +102,93 @@ class SessionResultsResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================================================
+# Standings Schemas (for /api/results/{season}/standings)
+# ============================================================================
+
+class DriverStanding(BaseModel):
+    """Individual driver's championship standing for a season"""
+    position: int  # Championship position (1st, 2nd, 3rd, etc.)
+    driver_code: str
+    full_name: str
+    team_name: str
+    team_color: Optional[str] = None
+    total_points: float
+    headshot_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ConstructorStanding(BaseModel):
+    """Individual constructor's championship standing for a season"""
+    position: int  # Championship position (1st, 2nd, 3rd, etc.)
+    team_name: str
+    team_color: Optional[str] = None
+    total_points: float
+
+    class Config:
+        from_attributes = True
+
+
+class StandingsResponse(BaseModel):
+    """
+    Complete standings response for GET /api/results/{season}/standings.
+
+    Returns driver and constructor standings for an entire season.
+    """
+    year: int
+    drivers: List[DriverStanding]
+    constructors: List[ConstructorStanding]
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# Season Rounds Schemas (for /api/results/{season})
+# ============================================================================
+
+class RoundPodiumDriver(BaseModel):
+    """Driver information for podium finisher"""
+    full_name: str
+    driver_code: str
+    team_name: str
+    team_color: Optional[str] = None
+    headshot_url: Optional[str] = None
+    fastest_lap: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class RoundSummary(BaseModel):
+    """
+    Summary of a single round showing top 3 finishers.
+
+    Used in the main results page to display all rounds for a season.
+    """
+    round: int
+    event_name: str
+    date: date
+    circuit_name: str
+    session_type: str  # 'race', 'sprint_race', 'qualifying', 'sprint_qualifying'
+    podium: List[RoundPodiumDriver]  # Top 3 drivers
+
+    class Config:
+        from_attributes = True
+
+
+class SeasonRoundsResponse(BaseModel):
+    """
+    Complete response for GET /api/results/{season}.
+
+    Returns all rounds for a season with top 3 finishers for each.
+    """
+    year: int
+    rounds: List[RoundSummary]
+
+    class Config:
+        from_attributes = True

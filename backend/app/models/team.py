@@ -34,6 +34,7 @@ class Team(Base):
 
     # Relationships
     session_results = relationship("SessionResult", back_populates="team")
+    race_results = relationship("RaceResult", back_populates="team")  # Legacy relationship
 
     # Constraints
     __table_args__ = (

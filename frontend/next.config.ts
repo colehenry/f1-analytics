@@ -8,6 +8,11 @@ const nextConfig: NextConfig = {
         hostname: 'www.formula1.com',
         pathname: '/content/dam/fom-website/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'media.formula1.com',
+        pathname: '/**',
+      },
     ],
   },
 };
