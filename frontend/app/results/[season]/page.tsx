@@ -146,13 +146,13 @@ export default function ResultsPage() {
 	return (
 		<main className="min-h-screen bg-[#15151e] p-6">
 			<div className="max-w-7xl mx-auto">
-				{/* Header with year selector */}
-				<div className="mb-4 flex items-center justify-end">
+				{/* Header with year selector and title */}
+				<div className="mb-6 flex items-center gap-3">
 					{/* Year Dropdown */}
 					<select
 						value={season}
 						onChange={(e) => handleYearChange(e.target.value)}
-						className="px-6 py-3 border-2 border-[#2a2a35] rounded-xl bg-[#1e1e28] text-xl text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#a020f0] hover:border-[#a020f0] transition-all cursor-pointer shadow-lg"
+						className="px-3 py-1.5 border border-[#2a2a35] rounded bg-[#1e1e28] text-2xl text-white font-bold focus:outline-none focus:border-[#a020f0] hover:border-[#a020f0]/50 transition-all cursor-pointer"
 					>
 						{availableYears.map((year) => (
 							<option key={year} value={year}>
@@ -160,8 +160,10 @@ export default function ResultsPage() {
 							</option>
 						))}
 					</select>
-				</div>
 
+					{/* Title */}
+					<h1 className="text-2xl font-bold text-white">Season Results</h1>
+				</div>
 				{/* Final Standings Section */}
 				<div className="mb-6">
 					{/* Driver and Constructor Standings Side by Side */}
@@ -328,7 +330,6 @@ export default function ResultsPage() {
 						</button>
 					</div>
 				</div>
-
 				{/* Races Section */}
 				<div>
 					<h2 className="text-xl font-bold text-white mb-3">Race Results</h2>
