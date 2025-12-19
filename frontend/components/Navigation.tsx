@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -42,14 +43,20 @@ export default function Navigation() {
 	};
 
 	return (
-		<nav className="fixed top-0 left-0 right-0 bg-purple-600 shadow-lg z-50">
+		<nav className="fixed top-0 left-0 right-0 bg-black shadow-lg z-50 opacity-100">
 			<div className="max-w-7xl mx-auto px-8">
 				<div className="flex items-center justify-between h-16">
 					{/* Logo - left side */}
 					<div className="flex-shrink-0">
 						<Link href="/" className="block">
-							<div className="w-10 h-10 bg-white/10 rounded flex items-center justify-center hover:bg-white/20 transition-colors">
-								<span className="text-white text-xl font-bold">F1</span>
+							<div className="h-16 w-16 rounded flex items-center justify-center hover:opacity-80 transition-opacity">
+								<Image
+									src="/favicon.ico"
+									alt="lapwise logo"
+									width={64}
+									height={64}
+									className="rounded"
+								/>
 							</div>
 						</Link>
 					</div>
@@ -60,8 +67,10 @@ export default function Navigation() {
 							<Link
 								key={link.href}
 								href={link.href}
-								className={`text-white hover:text-purple-200 hover:bg-white/10 rounded-md transition-all px-4 py-2 text-base ${
-									isActive(link.href) ? "font-bold" : "font-medium"
+								className={`hover:text-purple-200 hover:bg-white/10 rounded-md transition-all px-4 py-2 text-base ${
+									isActive(link.href)
+										? "font-bold text-purple-500"
+										: "font-medium text-white"
 								}`}
 							>
 								{link.label}
