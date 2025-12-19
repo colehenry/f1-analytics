@@ -196,7 +196,7 @@ export default function SessionDetail({
                               alt={result.driver.full_name}
                               width={40}
                               height={40}
-                              className="rounded-full object-cover border-2 border-white"
+                              className="rounded-full object-cover border border-gray-700"
                             />
                           )}
                         <div>

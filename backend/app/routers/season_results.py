@@ -31,6 +31,10 @@ from app.schemas.result import (
     RoundSummary,
     RoundPodiumDriver,
     SessionResultsResponse,
+    PointsProgressionResponse,
+    DriverProgressionData,
+    ConstructorProgressionData,
+    PointsProgressionRound,
 )
 
 router = APIRouter()
@@ -149,6 +153,250 @@ async def get_season_standings(season: int, db: AsyncSession = Depends(get_db)):
     ]
 
     return StandingsResponse(year=season, drivers=drivers, constructors=constructors)
+
+
+@router.get("/{season}/points-progression", response_model=PointsProgressionResponse)
+async def get_points_progression(
+    season: int,
+    mode: str = "drivers",
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get cumulative points progression throughout a season.
+
+    Returns round-by-round cumulative points for drivers or constructors.
+    Includes round 0 with 0 points for all entities as the starting point.
+
+    Args:
+        season: The year to get progression data for
+        mode: Either 'drivers' or 'constructors' (default: 'drivers')
+    """
+    if mode not in ["drivers", "constructors"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Mode must be either 'drivers' or 'constructors'"
+        )
+
+    if mode == "drivers":
+        # Get all sessions that award points (race and sprint_race)
+        # Calculate cumulative sum using window function
+        query = (
+            select(
+                Driver.driver_code,
+                Driver.full_name,
+                Team.team_color,
+                Session.round,
+                Session.session_type,
+                Circuit.name.label("circuit_name"),
+                func.sum(
+                    func.coalesce(SessionResult.points, 0)
+                ).over(
+                    partition_by=Driver.id,
+                    order_by=(Session.round, Session.session_type.desc())  # sprint_race before race
+                ).label("cumulative_points")
+            )
+            .join(SessionResult, Driver.id == SessionResult.driver_id)
+            .join(Session, SessionResult.session_id == Session.id)
+            .join(Team, SessionResult.team_id == Team.id)
+            .join(Circuit, Session.circuit_id == Circuit.id)
+            .where(Session.year == season)
+            .where(Session.session_type.in_(["race", "sprint_race"]))
+            .distinct(Driver.id, Session.round, Session.session_type, Team.team_color, Circuit.name)
+            .order_by(Driver.id, Session.round, Session.session_type.desc())
+        )
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        if not rows:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No points data found for season {season}"
+            )
+
+        # Get all sessions (sprint and race) with their details
+        sessions_query = (
+            select(
+                Session.round,
+                Session.event_name,
+                Session.session_type
+            )
+            .where(Session.year == season)
+            .where(Session.session_type.in_(["race", "sprint_race"]))
+            .order_by(Session.round, Session.session_type.desc())  # sprint_race before race alphabetically
+        )
+        sessions_result = await db.execute(sessions_query)
+        all_sessions = [(row.round, row.event_name, row.session_type) for row in sessions_result.all()]
+
+        # Group by driver and track points per session
+        drivers_dict = {}
+        for row in rows:
+            key = row.driver_code
+            if key not in drivers_dict:
+                drivers_dict[key] = {
+                    "driver_code": row.driver_code,
+                    "full_name": row.full_name,
+                    "team_color": row.team_color,
+                    "sessions_data": {}
+                }
+            # Store cumulative points per round
+            if row.round not in drivers_dict[key]["sessions_data"]:
+                drivers_dict[key]["sessions_data"][row.round] = {}
+            drivers_dict[key]["sessions_data"][row.round][row.session_type] = float(row.cumulative_points)
+
+        # Build progression with sprint and race as separate data points
+        for driver_data in drivers_dict.values():
+            progression = [PointsProgressionRound(round="0", cumulative_points=0.0, event_name=None)]
+            last_points = 0.0
+
+            for round_num, event_name, session_type in all_sessions:
+                round_data = driver_data["sessions_data"].get(round_num, {})
+
+                if session_type in round_data:
+                    # Driver participated in this session
+                    last_points = round_data[session_type]
+                # If not, carry forward last_points
+
+                # Create round identifier: "21-s" for sprint, "21" for race
+                round_id = f"{round_num}-s" if session_type == "sprint_race" else str(round_num)
+
+                progression.append(
+                    PointsProgressionRound(
+                        round=round_id,
+                        cumulative_points=last_points,
+                        event_name=event_name
+                    )
+                )
+
+            driver_data["progression"] = progression
+            del driver_data["sessions_data"]  # Clean up temporary data
+
+        # Calculate final positions based on final points
+        sorted_drivers = sorted(
+            drivers_dict.values(),
+            key=lambda d: d["progression"][-1].cumulative_points,
+            reverse=True
+        )
+        for idx, driver_data in enumerate(sorted_drivers):
+            driver_data["final_position"] = idx + 1
+
+        drivers = [
+            DriverProgressionData(**data) for data in drivers_dict.values()
+        ]
+
+        return PointsProgressionResponse(
+            year=season,
+            type="drivers",
+            drivers=drivers,
+            constructors=None
+        )
+
+    else:
+        # Constructor Points Progression Query
+        query = (
+            select(
+                Team.name.label("team_name"),
+                Team.team_color,
+                Session.round,
+                Session.session_type,
+                Circuit.name.label("circuit_name"),
+                func.sum(
+                    func.coalesce(SessionResult.points, 0)
+                ).over(
+                    partition_by=Team.id,
+                    order_by=(Session.round, Session.session_type.desc())
+                ).label("cumulative_points")
+            )
+            .join(SessionResult, Team.id == SessionResult.team_id)
+            .join(Session, SessionResult.session_id == Session.id)
+            .join(Circuit, Session.circuit_id == Circuit.id)
+            .where(Session.year == season)
+            .where(Session.session_type.in_(["race", "sprint_race"]))
+            .distinct(Team.id, Session.round, Session.session_type, Circuit.name)
+            .order_by(Team.id, Session.round, Session.session_type.desc())
+        )
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        if not rows:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No points data found for season {season}"
+            )
+
+        # Get all sessions (sprint and race) with their details
+        sessions_query = (
+            select(
+                Session.round,
+                Session.event_name,
+                Session.session_type
+            )
+            .where(Session.year == season)
+            .where(Session.session_type.in_(["race", "sprint_race"]))
+            .order_by(Session.round, Session.session_type.desc())
+        )
+        sessions_result = await db.execute(sessions_query)
+        all_sessions = [(row.round, row.event_name, row.session_type) for row in sessions_result.all()]
+
+        # Group by team and track points per session
+        teams_dict = {}
+        for row in rows:
+            key = row.team_name
+            if key not in teams_dict:
+                teams_dict[key] = {
+                    "team_name": row.team_name,
+                    "team_color": row.team_color,
+                    "sessions_data": {}
+                }
+            if row.round not in teams_dict[key]["sessions_data"]:
+                teams_dict[key]["sessions_data"][row.round] = {}
+            teams_dict[key]["sessions_data"][row.round][row.session_type] = float(row.cumulative_points)
+
+        # Build progression with sprint and race as separate data points
+        for team_data in teams_dict.values():
+            progression = [PointsProgressionRound(round="0", cumulative_points=0.0, event_name=None)]
+            last_points = 0.0
+
+            for round_num, event_name, session_type in all_sessions:
+                round_data = team_data["sessions_data"].get(round_num, {})
+
+                if session_type in round_data:
+                    last_points = round_data[session_type]
+
+                # Create round identifier: "21-s" for sprint, "21" for race
+                round_id = f"{round_num}-s" if session_type == "sprint_race" else str(round_num)
+
+                progression.append(
+                    PointsProgressionRound(
+                        round=round_id,
+                        cumulative_points=last_points,
+                        event_name=event_name
+                    )
+                )
+
+            team_data["progression"] = progression
+            del team_data["sessions_data"]  # Clean up temporary data
+
+        # Calculate final positions based on final points
+        sorted_teams = sorted(
+            teams_dict.values(),
+            key=lambda t: t["progression"][-1].cumulative_points,
+            reverse=True
+        )
+        for idx, team_data in enumerate(sorted_teams):
+            team_data["final_position"] = idx + 1
+
+        constructors = [
+            ConstructorProgressionData(**data) for data in teams_dict.values()
+        ]
+
+        return PointsProgressionResponse(
+            year=season,
+            type="constructors",
+            drivers=None,
+            constructors=constructors
+        )
 
 
 @router.get("/{season}", response_model=SeasonRoundsResponse)

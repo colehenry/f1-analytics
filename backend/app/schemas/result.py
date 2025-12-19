@@ -192,3 +192,56 @@ class SeasonRoundsResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================================================
+# Points Progression Schemas (for /api/results/{season}/points-progression)
+# ============================================================================
+
+class PointsProgressionRound(BaseModel):
+    """Single round's cumulative points total"""
+    round: str  # Round identifier: "21" for race, "21-s" for sprint
+    cumulative_points: float
+    event_name: Optional[str] = None  # Grand Prix name (e.g., "Chinese Grand Prix")
+
+    class Config:
+        from_attributes = True
+
+
+class DriverProgressionData(BaseModel):
+    """Driver with cumulative points progression across all rounds"""
+    driver_code: str
+    full_name: str
+    team_color: Optional[str] = None
+    final_position: int  # Final championship position for sorting
+    progression: List[PointsProgressionRound]
+
+    class Config:
+        from_attributes = True
+
+
+class ConstructorProgressionData(BaseModel):
+    """Constructor with cumulative points progression across all rounds"""
+    team_name: str
+    team_color: Optional[str] = None
+    final_position: int  # Final championship position for sorting
+    progression: List[PointsProgressionRound]
+
+    class Config:
+        from_attributes = True
+
+
+class PointsProgressionResponse(BaseModel):
+    """
+    Complete response for GET /api/results/{season}/points-progression.
+
+    Returns cumulative points progression throughout the season.
+    The 'type' field determines whether data contains drivers or constructors.
+    """
+    year: int
+    type: str  # 'drivers' or 'constructors'
+    drivers: Optional[List[DriverProgressionData]] = None
+    constructors: Optional[List[ConstructorProgressionData]] = None
+
+    class Config:
+        from_attributes = True
