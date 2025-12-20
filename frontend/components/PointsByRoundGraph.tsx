@@ -13,7 +13,7 @@ import {
 
 // Type definitions
 type ProgressionRound = {
-	round: string; // Round identifier: "21" for race, "21-s" for sprint
+	round: string; // Round identifier: "21" for race, "21-sprint" for sprint
 	cumulative_points: number;
 	event_name: string | null;
 };
@@ -46,54 +46,27 @@ type ChartDataPoint = {
 	[key: string]: number | string | null | undefined;
 };
 
-interface PointsProgressionGraphProps {
+interface PointsByRoundGraphProps {
 	season: string;
 }
 
-// Custom X-axis Tick Component for sprint race styling
+// Custom X-axis Tick Component
 const CustomXAxisTick = (props: any) => {
 	const { x, y, payload } = props;
-	const isSprint = payload.value?.endsWith("-s");
-	const textColor = isSprint ? "#a020f0" : "#999";
 
 	return (
 		<g transform={`translate(${x},${y})`}>
-			<text
-				x={0}
-				y={0}
-				dy={16}
-				textAnchor="middle"
-				fill={textColor}
-				fontSize={12}
-			>
+			<text x={0} y={0} dy={16} textAnchor="middle" fill="#999" fontSize={12}>
 				{payload.value}
 			</text>
 		</g>
 	);
 };
 
-// Custom Dot Component for sprint race styling
+// Custom Dot Component
 const CustomDot = (props: any) => {
-	const { cx, cy, payload, stroke } = props;
-	const isSprint = payload.round?.endsWith("-s");
+	const { cx, cy, stroke } = props;
 
-	if (isSprint) {
-		// Sprint races: team color fill with purple stroke from edge to center
-		return (
-			<g>
-				<circle
-					cx={cx}
-					cy={cy}
-					r={4}
-					fill={stroke}
-					stroke="#a020f0"
-					strokeWidth={2}
-				/>
-			</g>
-		);
-	}
-
-	// Regular races: normal dot
 	return (
 		<circle
 			cx={cx}
@@ -115,31 +88,49 @@ const CustomTooltip = ({ active, payload, label, mode }: any) => {
 
 	// Get event name from first payload entry
 	const eventName = payload[0]?.payload?.event_name || `Round ${label}`;
-	const isSprint = label?.endsWith("-s");
+	const isSprint = label?.endsWith("-sprint");
 	const displayName = isSprint ? `${eventName}: Sprint` : eventName;
 
 	return (
 		<div className="bg-[#1e1e28] border border-[#2a2a35] rounded-lg p-3 shadow-xl">
 			<p className="font-bold text-white mb-2">{displayName}</p>
-			{payload.map((entry: any) => (
-				<div key={entry.dataKey} className="flex items-center gap-2 mb-1">
-					<div
-						className="w-3 h-3 rounded-full"
-						style={{ backgroundColor: entry.color }}
-					/>
-					<span className="font-bold text-white text-sm">
-						{mode === "drivers" ? entry.dataKey : entry.name}:{" "}
-						{entry.value.toFixed(0)} pts
-					</span>
-				</div>
-			))}
+			{payload.map((entry: any) => {
+				// Calculate points gained this round
+				const currentPoints = entry.value;
+				const previousPoints = entry.payload[`_prev_${entry.dataKey}`] || 0;
+				const pointsGained = currentPoints - previousPoints;
+
+				return (
+					<div key={entry.dataKey} className="flex items-center gap-2 mb-1">
+						<div
+							className="w-3 h-3 rounded-full"
+							style={{ backgroundColor: entry.color }}
+						/>
+						<span className="font-bold text-white text-sm">
+							{mode === "drivers" ? entry.dataKey : entry.name}:{" "}
+							{entry.value.toFixed(0)} pts{" "}
+							<span>
+								(
+								<span
+									className={
+										pointsGained === 0 ? "text-blue-500" : "text-green-500"
+									}
+								>
+									{pointsGained === 0 ? "-" : `+${pointsGained.toFixed(0)}`}
+								</span>
+								)
+							</span>
+						</span>
+					</div>
+				);
+			})}
 		</div>
 	);
 };
 
-export default function PointsProgressionGraph({
+export default function PointsByRoundGraph({
 	season,
-}: PointsProgressionGraphProps) {
+}: PointsByRoundGraphProps) {
 	const [mode, setMode] = useState<"drivers" | "constructors">("drivers");
 	const [data, setData] = useState<ProgressionResponse | null>(null);
 	const [loading, setLoading] = useState<boolean>(true);
@@ -228,7 +219,8 @@ export default function PointsProgressionGraph({
 		// Create data points for each progression point
 		const chartData: ChartDataPoint[] = [];
 
-		for (const progressionPoint of allProgressionPoints) {
+		for (let i = 0; i < allProgressionPoints.length; i++) {
+			const progressionPoint = allProgressionPoints[i];
 			const dataPoint: ChartDataPoint = {
 				round: progressionPoint.round,
 				event_name: progressionPoint.event_name,
@@ -244,7 +236,18 @@ export default function PointsProgressionGraph({
 				const matchingPoint = entity.progression.find(
 					(p) => p.round === progressionPoint.round,
 				);
-				dataPoint[key] = matchingPoint?.cumulative_points || 0;
+				const currentPoints = matchingPoint?.cumulative_points || 0;
+				dataPoint[key] = currentPoints;
+
+				// Store previous round's points for tooltip calculation
+				if (i > 0) {
+					const prevPoint = entity.progression.find(
+						(p) => p.round === allProgressionPoints[i - 1].round,
+					);
+					dataPoint[`_prev_${key}`] = prevPoint?.cumulative_points || 0;
+				} else {
+					dataPoint[`_prev_${key}`] = 0;
+				}
 			}
 
 			chartData.push(dataPoint);
@@ -487,17 +490,19 @@ export default function PointsProgressionGraph({
 									value: "Round",
 									position: "insideBottom",
 									offset: -20,
-									style: { fontWeight: "bold" },
+									style: { fontWeight: "bold", fill: "white" },
 								}}
 								tick={<CustomXAxisTick />}
+								interval={0}
 							/>
 							<YAxis
 								stroke="#999"
 								label={{
 									value: "Total Points",
 									angle: -90,
-									position: "insideLeft",
-									style: { fontWeight: "bold" },
+									position: "center",
+									dx: -30,
+									style: { fontWeight: "bold", fill: "white" },
 								}}
 								domain={[0, getYAxisMax()]}
 							/>

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import PointsProgressionGraph from "@/components/PointsProgressionGraph";
+import PointsByRoundGraph from "@/components/PointsByRoundGraph";
 
 // Type definitions matching our API responses
 type DriverStanding = {
@@ -189,7 +189,9 @@ export default function ResultsPage() {
 
                       {/* Driver Photo */}
                       {driver.headshot_url &&
-                        driver.headshot_url !== "None" && (
+                        driver.headshot_url !== "None" &&
+                        driver.headshot_url !== "nan" &&
+                        driver.headshot_url.startsWith("http") && (
                           <Image
                             src={driver.headshot_url}
                             alt={driver.full_name}
@@ -334,7 +336,7 @@ export default function ResultsPage() {
 
         {/* Points Progression Graph */}
         <div className="mb-6">
-          <PointsProgressionGraph season={season} />
+          <PointsByRoundGraph season={season} />
         </div>
 
         {/* Races Section */}
@@ -390,7 +392,9 @@ export default function ResultsPage() {
 
                         {/* Driver Photo */}
                         {driver.headshot_url &&
-                          driver.headshot_url !== "None" && (
+                          driver.headshot_url !== "None" &&
+                          driver.headshot_url !== "nan" &&
+                          driver.headshot_url.startsWith("http") && (
                             <Image
                               src={driver.headshot_url}
                               alt={driver.full_name}

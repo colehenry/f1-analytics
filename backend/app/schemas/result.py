@@ -200,7 +200,7 @@ class SeasonRoundsResponse(BaseModel):
 
 class PointsProgressionRound(BaseModel):
     """Single round's cumulative points total"""
-    round: str  # Round identifier: "21" for race, "21-s" for sprint
+    round: str  # Round identifier: "21" for race, "21-sprint" for sprint
     cumulative_points: float
     event_name: Optional[str] = None  # Grand Prix name (e.g., "Chinese Grand Prix")
 

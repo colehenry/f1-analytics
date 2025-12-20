@@ -257,8 +257,8 @@ async def get_points_progression(
                     last_points = round_data[session_type]
                 # If not, carry forward last_points
 
-                # Create round identifier: "21-s" for sprint, "21" for race
-                round_id = f"{round_num}-s" if session_type == "sprint_race" else str(round_num)
+                # Create round identifier: "21-sprint" for sprint, "21" for race
+                round_id = f"{round_num}-sprint" if session_type == "sprint_race" else str(round_num)
 
                 progression.append(
                     PointsProgressionRound(
@@ -364,8 +364,8 @@ async def get_points_progression(
                 if session_type in round_data:
                     last_points = round_data[session_type]
 
-                # Create round identifier: "21-s" for sprint, "21" for race
-                round_id = f"{round_num}-s" if session_type == "sprint_race" else str(round_num)
+                # Create round identifier: "21-sprint" for sprint, "21" for race
+                round_id = f"{round_num}-sprint" if session_type == "sprint_race" else str(round_num)
 
                 progression.append(
                     PointsProgressionRound(
