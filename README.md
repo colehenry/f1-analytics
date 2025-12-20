@@ -2,7 +2,7 @@
 
 A full-stack web application for visualizing Formula 1 race data, standings, and statistics. Personal learning project to master modern web development.
 
-**Current Status:** ✅ Full 2024 season data ingested | Results page with championships and race summaries live
+**Current Status:** ✅ Full 2024 season data ingested | Interactive points progression graphs | Complete championship standings
 
 ---
 
@@ -11,21 +11,30 @@ A full-stack web application for visualizing Formula 1 race data, standings, and
 **Currently Working:**
 - Complete 2024 F1 season results from FastF1 3.6.1
 - Season standings page with driver and constructor championships
+- **Interactive points progression graphs** (Recharts line charts)
+  - Toggle between drivers and constructors
+  - Select/deselect entities to compare
+  - Hover tooltips showing points gained per round
+  - Sprint races shown as separate data points
+  - Team color differentiation for teammates
 - Championship cards showing top 5 (expandable to full list)
 - Drivers listed under each constructor team
 - Race-by-race podium displays with driver photos
 - Individual race detail pages for all 24 rounds
 - Sprint race support with separate detail pages
-- Dark mode UI with team color coding
+- Dark mode UI with team color coding (`#a020f0` purple accent)
+- Modern navigation bar with branding
 - Auto-generated API documentation at `/docs`
 
 **Frontend Pages:**
 - `/` - Home page
-- `/results/[season]` - Season standings and race summaries (e.g., `/results/2024`)
+- `/results/[season]` - Season standings, points progression graphs, and race summaries (e.g., `/results/2024`)
 - `/results/[season]/[round]` - Individual race details (e.g., `/results/2024/1`)
 - `/results/[season]/[round]/sprint` - Sprint race details
-- `/about` - About page (in progress)
-- `/analyze` - Analysis page (in progress)
+- `/about` - About page (placeholder)
+- `/analyze` - Analysis page (placeholder)
+- `/profile` - Profile page (placeholder)
+- `/settings` - Settings page (placeholder)
 
 **Database:**
 - PostgreSQL with session-based architecture
@@ -41,7 +50,7 @@ A full-stack web application for visualizing Formula 1 race data, standings, and
 
 ## Tech Stack
 
-**Frontend:** Next.js 14 (App Router) • React 18 • TypeScript • Tailwind CSS • Biome.js
+**Frontend:** Next.js 14 (App Router) • React 18 • TypeScript • Tailwind CSS • Biome.js • Recharts
 **Backend:** FastAPI • Python 3.11 • SQLAlchemy 2.0 • Pydantic v2
 **Database:** PostgreSQL 15
 **Data:** FastF1 3.6.1 • F1 Live Timing API
@@ -97,11 +106,19 @@ All endpoints prefixed with `/api/results`:
 - `GET /api/results/{season}` - All rounds with podium finishers
 - `GET /api/results/{season}/{round}` - Individual race details
 - `GET /api/results/{season}/{round}/sprint` - Sprint race details
+- `GET /api/results/{season}/points-progression?mode={drivers|constructors}` - Cumulative points by round
 
 Auto-generated Swagger docs at http://localhost:8000/docs
 
 ### ✅ Frontend Features
 - **Season standings view** with driver and constructor championships
+- **Interactive points progression charts** (Recharts)
+  - Line charts showing cumulative points by round
+  - Toggle between drivers and constructors
+  - Select/compare multiple entities
+  - Sprint races as separate data points
+  - Points gained tooltips on hover
+  - Team color-coded lines with teammate differentiation
 - **Compact layout** to minimize scrolling
 - **Championship cards** showing top 5 by default, expandable to full list
 - **Team driver lists** under each constructor with points
@@ -111,7 +128,8 @@ Auto-generated Swagger docs at http://localhost:8000/docs
 - **Fastest lap indicators** on race results
 - **Sprint race badges** to distinguish sprint weekends
 - **Responsive design** with Tailwind CSS
-- **Dark mode** UI theme
+- **Dark mode** UI theme with purple accent (`#a020f0`)
+- **Navigation bar** with branding and page links
 
 ### ✅ Database Schema
 - **sessions**: Supports multiple session types per round (race, qualifying, sprint, etc.)
@@ -125,22 +143,23 @@ Auto-generated Swagger docs at http://localhost:8000/docs
 ## What's Next
 
 **Immediate Improvements:**
-- Add qualifying results page
-- Performance optimization for large datasets
+- ⭐ Add qualifying results page (data already available in DB)
+- Performance optimization for large datasets (pagination, lazy loading)
 - Error boundaries and loading states
 - Add more seasons (2023, 2022, etc.)
+- Implement React Query for caching
 
 **Phase 2:**
-- Lap time visualizations (line charts)
-- Driver comparison tools
-- Circuit-specific statistics
-- Head-to-head driver comparisons
+- Lap time visualizations (line charts per race)
+- Driver comparison tools (head-to-head stats)
+- Circuit-specific statistics (track records, fastest laps)
+- Team performance trends across seasons
 
 **Phase 3:**
 - Telemetry data visualizations (speed, throttle, brake traces)
 - Historical data (1950-2017) from alternative sources
 - Advanced analytics and insights
-- Predictive features
+- Predictive features (race outcome predictions)
 
 ---
 
@@ -161,9 +180,11 @@ F1 Live Timing API → FastF1 3.6.1 → ingest_season.py → PostgreSQL → Fast
 - `backend/scripts/ingest_season.py` - Session data ingestion script
 - `backend/app/models/session.py` - Session model
 - `backend/app/models/session_result.py` - Result model
-- `backend/app/routers/season_results.py` - API endpoints
-- `frontend/app/results/[season]/page.tsx` - Main results page
+- `backend/app/routers/season_results.py` - API endpoints (standings, rounds, progression)
+- `frontend/app/results/[season]/page.tsx` - Main results page with standings and graphs
 - `frontend/app/results/[season]/[round]/page.tsx` - Race detail page
+- `frontend/components/PointsByRoundGraph.tsx` - Interactive points progression chart
+- `frontend/components/Navigation.tsx` - App navigation bar
 
 ---
 
@@ -223,7 +244,9 @@ f1-analytics/
 │   │   ├── about/        # About page
 │   │   └── analyze/      # Analysis page
 │   ├── components/       # React components
-│   │   └── Navigation.tsx
+│   │   ├── Navigation.tsx
+│   │   ├── PointsByRoundGraph.tsx
+│   │   └── SessionDetail.tsx
 │   ├── lib/              # Utilities, API client
 │   └── package.json
 ├── backend/              # FastAPI app (Python 3.11)
