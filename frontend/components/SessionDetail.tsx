@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 
 // Type definitions matching our API responses
 type CircuitInfo = {
@@ -77,6 +78,7 @@ export default function SessionDetail({
   onBack,
 }: SessionDetailProps) {
   const { session, results } = data;
+  const [expandedResults, setExpandedResults] = useState<boolean>(false);
 
   return (
     <main className="min-h-screen bg-[#15151e] p-8">
@@ -155,7 +157,9 @@ export default function SessionDetail({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#2a2a35]">
-                {results.map((result) => (
+                {results
+                  .slice(0, expandedResults ? undefined : 5)
+                  .map((result) => (
                   <tr
                     key={`${result.driver.driver_code}-${result.position}`}
                     className="hover:bg-[#252530] transition-colors"
@@ -173,7 +177,13 @@ export default function SessionDetail({
                         result.grid_position &&
                         (() => {
                           const change = result.grid_position - result.position;
-                          if (change === 0) return null;
+                          if (change === 0) {
+                            return (
+                              <span className="text-base font-bold text-blue-500">
+                                -
+                              </span>
+                            );
+                          }
                           return (
                             <span
                               className={`text-base font-bold ${
@@ -264,6 +274,55 @@ export default function SessionDetail({
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Expand/Collapse Button */}
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setExpandedResults(!expandedResults)}
+            className="w-48 px-4 py-2 bg-[#1e1e28] border-2 border-[#2a2a35] rounded-lg text-white text-sm font-semibold hover:border-[#a020f0] transition-all flex items-center justify-center gap-2"
+          >
+            {expandedResults ? (
+              <>
+                <span>Collapse</span>
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <title>Collapse icon</title>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 15l7-7 7 7"
+                  />
+                </svg>
+              </>
+            ) : (
+              <>
+                <span>Expand</span>
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <title>Expand icon</title>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </>
+            )}
+          </button>
         </div>
       </div>
     </main>
