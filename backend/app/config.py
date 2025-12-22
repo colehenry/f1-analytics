@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str
+    local_database_url: str | None = None
+    dev_database_url: str | None = None
 
     # Application
     debug: bool = False
