@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import LapTimeByLapGraph from "./LapTimeByLapGraph";
 
 // Type definitions matching our API responses
 type CircuitInfo = {
@@ -323,6 +324,11 @@ export default function SessionDetail({
               </>
             )}
           </button>
+        </div>
+
+        {/* Lap Time Graph */}
+        <div className="mt-6">
+          <LapTimeByLapGraph season={session.year} round={session.round} />
         </div>
       </div>
     </main>

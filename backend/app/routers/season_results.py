@@ -13,7 +13,7 @@ from typing import List, Optional
 import math
 
 from app.database import get_db
-from app.models import Session, SessionResult, Driver, Team, Circuit
+from app.models import Session, SessionResult, Driver, Team, Circuit, Lap
 
 
 def sanitize_float(value: Optional[float]) -> Optional[float]:
@@ -35,6 +35,9 @@ from app.schemas.result import (
     DriverProgressionData,
     ConstructorProgressionData,
     PointsProgressionRound,
+    LapTimesResponse,
+    DriverLapTimesData,
+    LapData,
 )
 
 router = APIRouter()
@@ -672,3 +675,96 @@ async def get_round_details(
     ]
 
     return SessionResultsResponse(session=session_info, results=session_results)
+
+@router.get("/{season}/{round}/lap-times", response_model=LapTimesResponse)
+async def get_lap_times(
+    season: int, round: int, db: AsyncSession = Depends(get_db)
+):
+    """
+    Get lap-by-lap timing data for all drivers in a specific race.
+
+    Returns all laps (including pit in/out laps and deleted laps) with timing,
+    tyre, and track status information. Used for lap time visualization graphs.
+    """
+
+    # Get the race session for this round
+    session_query = (
+        select(Session)
+        .where(Session.year == season)
+        .where(Session.round == round)
+        .where(Session.session_type == "race")
+    )
+
+    session_result = await db.execute(session_query)
+    session = session_result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No race session found for season {season}, round {round}",
+        )
+
+    # Get all laps for this session with driver and team info
+    # Join: Lap -> Driver -> SessionResult (for final position) -> Team
+    laps_query = (
+        select(
+            Lap.lap_number,
+            Lap.lap_time_seconds,
+            Lap.compound,
+            Lap.tyre_life,
+            Lap.track_status,
+            Driver.driver_code,
+            Driver.full_name,
+            Team.team_color,
+            SessionResult.position.label("final_position"),
+        )
+        .join(Driver, Lap.driver_id == Driver.id)
+        .join(
+            SessionResult,
+            (SessionResult.session_id == Lap.session_id)
+            & (SessionResult.driver_id == Lap.driver_id),
+        )
+        .join(Team, SessionResult.team_id == Team.id)
+        .where(Lap.session_id == session.id)
+        .order_by(SessionResult.position, Lap.lap_number)
+    )
+
+    laps_result = await db.execute(laps_query)
+    lap_rows = laps_result.all()
+
+    if not lap_rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No lap data found for season {season}, round {round}",
+        )
+
+    # Group laps by driver
+    drivers_dict = {}
+    for row in lap_rows:
+        driver_code = row.driver_code
+
+        if driver_code not in drivers_dict:
+            drivers_dict[driver_code] = {
+                "driver_code": driver_code,
+                "full_name": row.full_name,
+                "team_color": row.team_color,
+                "final_position": row.final_position,
+                "laps": [],
+            }
+
+        drivers_dict[driver_code]["laps"].append(
+            LapData(
+                lap_number=row.lap_number,
+                lap_time_seconds=sanitize_float(row.lap_time_seconds),
+                compound=row.compound,
+                tyre_life=row.tyre_life,
+                track_status=row.track_status,
+            )
+        )
+
+    # Convert to list of DriverLapTimesData
+    drivers = [DriverLapTimesData(**data) for data in drivers_dict.values()]
+
+    return LapTimesResponse(
+        year=season, round=round, event_name=session.event_name, drivers=drivers
+    )

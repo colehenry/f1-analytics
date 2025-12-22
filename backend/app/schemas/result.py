@@ -245,3 +245,46 @@ class PointsProgressionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================================================
+# Lap Times Schemas (for /api/results/{season}/{round}/lap-times)
+# ============================================================================
+
+class LapData(BaseModel):
+    """Individual lap timing and metadata"""
+    lap_number: int
+    lap_time_seconds: Optional[float] = None  # NULL for in/out laps, deleted laps
+    compound: Optional[str] = None  # SOFT, MEDIUM, HARD, INTERMEDIATE, WET
+    tyre_life: Optional[int] = None  # Laps on this tyre set
+    track_status: Optional[str] = None  # 1=green, 2=yellow, etc.
+
+    class Config:
+        from_attributes = True
+
+
+class DriverLapTimesData(BaseModel):
+    """Driver metadata with all their lap times for a session"""
+    driver_code: str
+    full_name: str
+    team_color: Optional[str] = None
+    final_position: Optional[int] = None  # Finishing position in this race
+    laps: List[LapData]
+
+    class Config:
+        from_attributes = True
+
+
+class LapTimesResponse(BaseModel):
+    """
+    Complete response for GET /api/results/{season}/{round}/lap-times.
+
+    Returns lap-by-lap timing data for all drivers in a specific race session.
+    """
+    year: int
+    round: int
+    event_name: str
+    drivers: List[DriverLapTimesData]
+
+    class Config:
+        from_attributes = True
