@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import PointsByRoundGraph from "@/components/PointsByRoundGraph";
+import { apiUrl } from "@/lib/api";
 
 // Type definitions matching our API responses
 type DriverStanding = {
@@ -67,12 +68,9 @@ export default function ResultsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const response = await fetch(
-          "http://localhost:8000/api/results/seasons",
-          {
-            cache: "no-store",
-          },
-        );
+        const response = await fetch(apiUrl("/api/results/seasons"), {
+          cache: "no-store",
+        });
         const years = await response.json();
         setAvailableYears(years);
       } catch (error) {
@@ -93,10 +91,10 @@ export default function ResultsPage() {
 
         // Fetch standings and rounds in parallel
         const [standingsRes, roundsRes] = await Promise.all([
-          fetch(`http://localhost:8000/api/results/${season}/standings`, {
+          fetch(apiUrl(`/api/results/${season}/standings`), {
             cache: "no-store",
           }),
-          fetch(`http://localhost:8000/api/results/${season}`, {
+          fetch(apiUrl(`/api/results/${season}`), {
             cache: "no-store",
           }),
         ]);

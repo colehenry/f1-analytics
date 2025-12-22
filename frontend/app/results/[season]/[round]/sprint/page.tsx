@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import SessionDetail from "@/components/SessionDetail";
+import { apiUrl } from "@/lib/api";
 
 // Type definitions matching our API responses
 type CircuitInfo = {
@@ -70,7 +71,7 @@ export default function SprintDetailPage() {
       try {
         setLoading(true);
         const response = await fetch(
-          `http://localhost:8000/api/results/${season}/${round}/sprint`,
+          apiUrl(`/api/results/${season}/${round}/sprint`),
           {
             cache: "no-store",
           },

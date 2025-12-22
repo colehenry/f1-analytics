@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
+import { apiUrl } from "@/lib/api";
 
 async function getLatestSeason(): Promise<number> {
-  const res = await fetch("http://localhost:8000/api/results/seasons", {
+  const res = await fetch(apiUrl("/api/results/seasons"), {
     cache: "no-store",
   });
 

@@ -19,9 +19,14 @@ class Settings(BaseSettings):
     # Application
     debug: bool = False
     secret_key: str
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # FastF1
     fastf1_cache_dir: str = "./cache"
+
+    def get_cors_origins(self) -> list[str]:
+        """Parse comma-separated CORS origins into a list."""
+        return [origin.strip() for origin in self.cors_origins.split(",")]
 
     class Config:
         # Tell Pydantic where to find the .env file

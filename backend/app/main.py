@@ -11,28 +11,37 @@ app = FastAPI(
     debug=settings.debug,
 )
 
-# Configure CORS (Cross-Origin Resource Sharing) -> this allows your Next.js frontend (localhost:3000) to call your API (localhost:8000)
+# Configure CORS (Cross-Origin Resource Sharing)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Next.js dev server
-        "http://127.0.0.1:3000",  # Alternative localhost
-    ],
+    allow_origins=settings.get_cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
-# Root endpoint - simple health check
+# Root endpoint
 @app.get("/")
 async def root():
     """
-    Health check endpoint -> Returns a simple message to confirm API is running.
+    Root endpoint - Returns basic API information.
     """
     return {
         "message": "F1 Analytics API",
         "status": "running",
+        "version": "0.1.0",
+    }
+
+
+# Health check endpoint for deployment platforms
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint for monitoring and load balancers.
+    """
+    return {
+        "status": "healthy",
         "version": "0.1.0",
     }
 

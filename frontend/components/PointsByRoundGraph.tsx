@@ -10,6 +10,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
+import { apiUrl } from "@/lib/api";
 
 // Type definitions
 type ProgressionRound = {
@@ -161,7 +162,7 @@ export default function PointsByRoundGraph({
 			try {
 				setLoading(true);
 				const response = await fetch(
-					`http://localhost:8000/api/results/${season}/points-progression?mode=${mode}`,
+					apiUrl(`/api/results/${season}/points-progression?mode=${mode}`),
 					{
 						cache: "no-store",
 					},

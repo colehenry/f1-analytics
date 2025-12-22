@@ -10,6 +10,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
+import { apiUrl } from "@/lib/api";
 
 // Type definitions
 type LapData = {
@@ -218,7 +219,7 @@ export default function LapTimeByLapGraph({
 			try {
 				setLoading(true);
 				const response = await fetch(
-					`http://localhost:8000/api/results/${season}/${round}/lap-times`,
+					apiUrl(`/api/results/${season}/${round}/lap-times`),
 					{
 						cache: "no-store",
 					},
