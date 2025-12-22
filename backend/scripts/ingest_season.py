@@ -2,7 +2,7 @@
 Season Data Ingestion Script
 
 Ingests session data (races, qualifying, sprints) for a given F1 season.
-Safe to run multiple times (idempotent) - skips existing data.
+Safe to run multiple times (idempotent) - checks database first, skips existing data.
 
 Requirements:
     - FastF1 3.6.1+ (calculates results from F1 Live Timing API)
@@ -12,6 +12,15 @@ Usage:
     PYTHONPATH=$PWD python scripts/ingest_season.py
     PYTHONPATH=$PWD python scripts/ingest_season.py 2023  # Specific year
     PYTHONPATH=$PWD python scripts/ingest_season.py 2024 race,qualifying  # Specific session types
+    PYTHONPATH=$PWD python scripts/ingest_season.py 2024 --strict  # Fail fast on errors
+
+Features:
+    - ⚡ Database-first approach: Checks DB before making expensive FastF1 API calls
+    - Automatic retry with exponential backoff for network failures
+    - Detailed error reporting and success/failure tracking
+    - Absolute cache path for consistent caching
+    - Session availability detection (skips non-existent sprint sessions)
+    - Optional strict mode (--strict) to fail immediately on errors
 
 Schema:
     - sessions: year, round, session_type, event_name, date, circuit_id
@@ -21,6 +30,12 @@ Schema:
     - teams: Year-partitioned (unique constraint on year + name)
     - drivers: Year-independent (driver_code unique)
 
+Session Types:
+    - race: Main race
+    - qualifying: Qualifying session
+    - sprint_race: Sprint race (not all events)
+    - sprint_qualifying: Sprint qualifying (not all events)
+
 Note:
     FastF1 3.6.1+ calculates results from live timing data since Ergast API
     shutdown in 2024. Earlier versions (3.2.0) will result in NULL values.
@@ -29,6 +44,7 @@ Note:
 import fastf1
 import sys
 import os
+import time
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
@@ -38,7 +54,7 @@ from app.config import settings
 
 
 # Session types to ingest (configurable)
-DEFAULT_SESSION_TYPES = ['race', 'qualifying', 'sprint', 'sprint_qualifying']
+DEFAULT_SESSION_TYPES = ['race', 'qualifying', 'sprint_race', 'sprint_qualifying']
 
 
 def get_db_session():
@@ -226,6 +242,73 @@ def timedelta_to_seconds(td):
         return None
 
 
+def load_session_with_retry(year, round_num, session_name, max_retries=3):
+    """
+    Load a FastF1 session with retry logic and exponential backoff.
+
+    Args:
+        year: Season year
+        round_num: Round number
+        session_name: FastF1 session name ('Race', 'Qualifying', etc.)
+        max_retries: Maximum number of retry attempts
+
+    Returns:
+        Loaded FastF1 session object, or None if session doesn't exist
+
+    Raises:
+        Exception: If loading fails after all retries
+    """
+    for attempt in range(max_retries):
+        try:
+            fastf1_sess = fastf1.get_session(year, round_num, session_name)
+            fastf1_sess.load()
+            return fastf1_sess
+        except Exception as e:
+            error_msg = str(e).lower()
+
+            # Check if this is a "session doesn't exist" error (not a real failure)
+            if "no session" in error_msg or "not found" in error_msg or "invalid session" in error_msg:
+                return None
+
+            # Real error - retry with exponential backoff
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # 1s, 2s, 4s
+                print(f"    ⚠️  Load failed (attempt {attempt + 1}/{max_retries}): {e}")
+                print(f"    ⏳ Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                # Final attempt failed
+                raise
+
+    return None
+
+
+def session_exists(event, session_type_name):
+    """
+    Check if a session type is available for this event.
+
+    Args:
+        event: Event data from FastF1 schedule
+        session_type_name: Our session type ('sprint_race' or 'sprint_qualifying')
+
+    Returns:
+        bool: True if session should exist, False otherwise
+    """
+    # Sprint sessions only exist at certain events
+    if session_type_name in ['sprint_race', 'sprint_qualifying']:
+        # Check if event has sprint (look for 'Sprint' in session names)
+        # FastF1 event objects have session info in their attributes
+        try:
+            # The event object should have a Session5Name or similar indicating a sprint
+            return hasattr(event, 'Session5Name') and event.get('Session5Name') is not None
+        except Exception:
+            # If we can't determine, assume it might exist and let FastF1 tell us
+            return True
+
+    # Race and qualifying exist at all events
+    return True
+
+
 def ingest_race_results(db, fastf1_session, session_id, year):
     """
     Ingest race or sprint race results.
@@ -352,9 +435,48 @@ def ingest_qualifying_results(db, fastf1_session, session_id, year):
     print(f"  ✓ Added {new_results} new qualifying results")
 
 
-def ingest_session(db, year, round_num, event, session_type_name, fastf1_session_name):
+def check_session_in_db(db, year, round_num, session_type_name):
+    """
+    Check if session and its results already exist in database.
+
+    Args:
+        db: Database session
+        year: Season year
+        round_num: Round number
+        session_type_name: Our session type ('race', 'qualifying', 'sprint_race', 'sprint_qualifying')
+
+    Returns:
+        tuple: (session_exists: bool, has_results: bool, session_id: int or None)
+    """
+    # Check if session exists
+    existing_session = db.execute(
+        select(Session).where(
+            Session.year == year,
+            Session.round == round_num,
+            Session.session_type == session_type_name
+        )
+    ).scalar_one_or_none()
+
+    if not existing_session:
+        return False, False, None
+
+    # Session exists - check if it has results
+    result_count = db.execute(
+        select(SessionResult).where(
+            SessionResult.session_id == existing_session.id
+        )
+    ).scalars().all()
+
+    has_results = len(result_count) > 0
+
+    return True, has_results, existing_session.id
+
+
+def ingest_session(db, year, round_num, event, session_type_name, fastf1_session_name, strict_mode=False):
     """
     Ingest a single session (race, qualifying, sprint, etc.).
+
+    IMPORTANT: Checks database FIRST before loading from FastF1 to avoid unnecessary API calls.
 
     Args:
         db: Database session
@@ -363,24 +485,46 @@ def ingest_session(db, year, round_num, event, session_type_name, fastf1_session
         event: Event data from schedule
         session_type_name: Our session type ('race', 'qualifying', 'sprint_race', 'sprint_qualifying')
         fastf1_session_name: FastF1 session name ('Race', 'Qualifying', 'Sprint', 'Sprint Qualifying')
+        strict_mode: If True, raise exceptions instead of continuing
+
+    Returns:
+        bool: True if successful, False if failed/skipped
     """
-    # Ingest circuit
+    # STEP 1: Check if data already exists in database
+    session_exists, has_results, session_id = check_session_in_db(db, year, round_num, session_type_name)
+
+    if session_exists and has_results:
+        print(f"  ✓ Session and results already exist in database, skipping FastF1 load")
+        return True  # Success - already have the data
+
+    if session_exists and not has_results:
+        print(f"  ⚠️  Session exists but has no results, will reload from FastF1")
+
+    # STEP 2: Ingest circuit (fast database operation)
     circuit_id = ingest_circuit(db, event)
 
-    # Load FastF1 session data
+    # STEP 3: Load from FastF1 only if needed
     print(f"  📥 Loading {fastf1_session_name} data from FastF1...")
     try:
-        fastf1_sess = fastf1.get_session(year, round_num, fastf1_session_name)
-        fastf1_sess.load()
+        fastf1_sess = load_session_with_retry(year, round_num, fastf1_session_name)
 
-        # Ingest session metadata
-        session_date = fastf1_sess.date if hasattr(fastf1_sess, 'date') else event.get("EventDate")
-        session_id, should_process = ingest_session_metadata(
-            db, event, circuit_id, year, session_type_name, session_date
-        )
+        if fastf1_sess is None:
+            # Session doesn't exist (e.g., no sprint at this event)
+            print(f"  ⏭️  {fastf1_session_name} not available for this event")
+            return False
 
+        # STEP 4: Create/update session metadata if needed
+        if not session_exists:
+            session_date = fastf1_sess.date if hasattr(fastf1_sess, 'date') else event.get("EventDate")
+            session_id, should_process = ingest_session_metadata(
+                db, event, circuit_id, year, session_type_name, session_date
+            )
+        else:
+            # Session exists but had no results
+            should_process = True
+
+        # STEP 5: Ingest results
         if should_process:
-            # Ingest results based on session type
             if session_type_name in ['race', 'sprint_race']:
                 ingest_race_results(db, fastf1_sess, session_id, year)
             elif session_type_name in ['qualifying', 'sprint_qualifying']:
@@ -388,17 +532,23 @@ def ingest_session(db, year, round_num, event, session_type_name, fastf1_session
         else:
             print(f"  ⏭️  Results already exist, skipping")
 
+        return True
+
     except Exception as e:
         print(f"  ❌ Error loading {fastf1_session_name} data: {e}")
+        if strict_mode:
+            raise
+        return False
 
 
-def ingest_season(season_year, session_types=None):
+def ingest_season(season_year, session_types=None, strict_mode=False):
     """
     Main function: Ingest all sessions for a given season.
 
     Args:
         season_year: Year to ingest (e.g., 2024)
         session_types: List of session types to ingest (defaults to all)
+        strict_mode: If True, fail fast on any error instead of continuing
     """
     if session_types is None:
         session_types = DEFAULT_SESSION_TYPES
@@ -406,13 +556,16 @@ def ingest_season(season_year, session_types=None):
     print(f"\n{'='*60}")
     print(f"INGESTING {season_year} SEASON")
     print(f"Session types: {', '.join(session_types)}")
+    if strict_mode:
+        print(f"Mode: STRICT (fail fast on errors)")
     print(f"{'='*60}\n")
 
-    # Enable FastF1 cache
-    cache_dir = "../cache"
+    # Enable FastF1 cache (use absolute path for consistency)
+    cache_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../cache"))
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
     fastf1.Cache.enable_cache(cache_dir)
+    print(f"📁 Using cache directory: {cache_dir}\n")
 
     # Get database session
     db = get_db_session()
@@ -423,6 +576,16 @@ def ingest_season(season_year, session_types=None):
         'qualifying': 'Qualifying',
         'sprint_race': 'Sprint',
         'sprint_qualifying': 'Sprint Qualifying',
+    }
+
+    # Track success/failure
+    stats = {
+        'total_sessions_attempted': 0,
+        'successful': 0,
+        'already_exists': 0,  # Already in database
+        'not_available': 0,   # Session doesn't exist (e.g., no sprint)
+        'failed': 0,
+        'failures': []  # List of (round, session_type, error) tuples
     }
 
     try:
@@ -452,20 +615,58 @@ def ingest_season(season_year, session_types=None):
                 fastf1_session_name = SESSION_TYPE_MAP[session_type]
                 print(f"\n  🔹 {session_type.upper()}")
 
+                stats['total_sessions_attempted'] += 1
+
+                # Check if already exists BEFORE calling ingest_session
+                session_exists, has_results, _ = check_session_in_db(db, season_year, round_num, session_type)
+
+                if session_exists and has_results:
+                    # Quick check - data already in DB, don't even try to load
+                    print(f"  ✓ Already in database")
+                    stats['already_exists'] += 1
+                    continue
+
                 try:
-                    ingest_session(db, season_year, round_num, event, session_type, fastf1_session_name)
+                    success = ingest_session(
+                        db, season_year, round_num, event,
+                        session_type, fastf1_session_name,
+                        strict_mode=strict_mode
+                    )
+                    if success:
+                        stats['successful'] += 1
+                    else:
+                        # Session doesn't exist (e.g., no sprint at this event)
+                        stats['not_available'] += 1
                 except Exception as e:
+                    stats['failed'] += 1
+                    stats['failures'].append((round_num, event_name, session_type, str(e)))
                     print(f"  ❌ Failed to ingest {session_type}: {e}")
+                    if strict_mode:
+                        raise
                     continue
 
             print()  # Blank line between events
 
+        # Print summary
         print(f"{'='*60}")
         print(f"✅ INGESTION COMPLETE!")
+        print(f"{'='*60}")
+        print(f"📊 Summary:")
+        print(f"   Total sessions checked: {stats['total_sessions_attempted']}")
+        print(f"   ✓ Newly ingested: {stats['successful']}")
+        print(f"   ✓ Already in database: {stats['already_exists']}")
+        print(f"   ⏭️  Not available (no sprint): {stats['not_available']}")
+        print(f"   ❌ Failed: {stats['failed']}")
+
+        if stats['failures']:
+            print(f"\n⚠️  Failed sessions:")
+            for round_num, event_name, session_type, error in stats['failures']:
+                print(f"   - R{round_num} {event_name} ({session_type}): {error}")
+
         print(f"{'='*60}\n")
 
     except Exception as e:
-        print(f"\n❌ ERROR: {e}")
+        print(f"\n❌ FATAL ERROR: {e}")
         import traceback
         traceback.print_exc()
         db.rollback()
@@ -479,9 +680,13 @@ if __name__ == "__main__":
     season = int(sys.argv[1]) if len(sys.argv) > 1 else 2024
 
     # Optional: specify session types (e.g., python ingest_season.py 2024 race,qualifying)
-    if len(sys.argv) > 2:
+    # Changed default to match DEFAULT_SESSION_TYPES
+    if len(sys.argv) > 2 and not sys.argv[2].startswith('--'):
         session_types = sys.argv[2].split(',')
     else:
-        session_types = ['race', 'qualifying']  # Default: just race and qualifying
+        session_types = ['race', 'qualifying', 'sprint_race', 'sprint_qualifying']
 
-    ingest_season(season, session_types)
+    # Optional: strict mode flag (--strict)
+    strict_mode = '--strict' in sys.argv
+
+    ingest_season(season, session_types, strict_mode=strict_mode)
