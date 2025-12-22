@@ -50,6 +50,7 @@ from sqlalchemy.orm import sessionmaker
 
 # Import our models and config
 from app.models import Driver, Team, Circuit, Session, SessionResult
+from app.models import Lap, Weather, TrackStatus, RaceControlMessage
 from app.config import settings
 
 
@@ -232,6 +233,17 @@ def safe_int(val):
         return None
 
 
+def safe_bool(val):
+    """Convert value to bool, handling NaN and None"""
+    import pandas as pd
+    if pd.isna(val):
+        return None
+    try:
+        return bool(val)
+    except (ValueError, TypeError):
+        return None
+
+
 def timedelta_to_seconds(td):
     """Convert pandas Timedelta to seconds (float)"""
     if td is None:
@@ -242,9 +254,43 @@ def timedelta_to_seconds(td):
         return None
 
 
+def datetime_or_timedelta_to_seconds(value, session_start=None):
+    """
+    Convert datetime or Timedelta to seconds since session start.
+
+    Args:
+        value: datetime or Timedelta object
+        session_start: datetime of session start (required if value is datetime)
+
+    Returns:
+        float: seconds since session start, or None if conversion fails
+    """
+    import pandas as pd
+    from datetime import datetime
+
+    if pd.isna(value) or value is None:
+        return None
+
+    try:
+        # If it's a Timedelta, just get total seconds
+        if hasattr(value, 'total_seconds'):
+            return value.total_seconds()
+
+        # If it's a datetime and we have session_start, calculate difference
+        if isinstance(value, datetime) and session_start is not None:
+            delta = value - session_start
+            return delta.total_seconds()
+
+        return None
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def load_session_with_retry(year, round_num, session_name, max_retries=3):
     """
     Load a FastF1 session with retry logic and exponential backoff.
+
+    Loads all data types: laps, weather, messages, telemetry.
 
     Args:
         year: Season year
@@ -261,7 +307,8 @@ def load_session_with_retry(year, round_num, session_name, max_retries=3):
     for attempt in range(max_retries):
         try:
             fastf1_sess = fastf1.get_session(year, round_num, session_name)
-            fastf1_sess.load()
+            # Load all data types (laps includes track_status)
+            fastf1_sess.load(laps=True, weather=True, messages=True)
             return fastf1_sess
         except Exception as e:
             error_msg = str(e).lower()
@@ -435,9 +482,346 @@ def ingest_qualifying_results(db, fastf1_session, session_id, year):
     print(f"  ✓ Added {new_results} new qualifying results")
 
 
+def ingest_lap_data(db, fastf1_session, session_id):
+    """
+    Ingest lap-by-lap timing data for a session.
+
+    Args:
+        db: Database session
+        fastf1_session: FastF1 session object (already loaded with laps=True)
+        session_id: ID of the session in our database
+    """
+    try:
+        laps = fastf1_session.laps
+        if laps is None or len(laps) == 0:
+            print(f"  ⏭️  No lap data available")
+            return
+
+        print(f"  📊 Processing {len(laps)} laps...")
+
+        # Check if lap data already exists
+        existing_count = db.execute(
+            select(Lap).where(Lap.session_id == session_id)
+        ).scalars().all()
+
+        if len(existing_count) > 0:
+            print(f"  ✓ Lap data already exists ({len(existing_count)} laps), skipping")
+            return
+
+        # Map driver codes to driver IDs
+        driver_map = {}
+        for driver_code in laps['Driver'].unique():
+            if driver_code and str(driver_code) != 'nan':
+                driver = db.execute(
+                    select(Driver).where(Driver.driver_code == driver_code)
+                ).scalar_one_or_none()
+                if driver:
+                    driver_map[driver_code] = driver.id
+
+        new_laps = 0
+        for idx, lap_data in laps.iterrows():
+            driver_code = lap_data.get('Driver')
+            if not driver_code or str(driver_code) == 'nan' or driver_code not in driver_map:
+                continue
+
+            driver_id = driver_map[driver_code]
+            lap_number = safe_int(lap_data.get('LapNumber'))
+
+            if not lap_number:
+                continue  # Skip invalid laps
+
+            # Convert Timedelta fields to seconds
+            lap_time = timedelta_to_seconds(lap_data.get('LapTime'))
+            sector1_time = timedelta_to_seconds(lap_data.get('Sector1Time'))
+            sector2_time = timedelta_to_seconds(lap_data.get('Sector2Time'))
+            sector3_time = timedelta_to_seconds(lap_data.get('Sector3Time'))
+
+            # Session time fields (already in seconds or Timedelta)
+            lap_start_time = timedelta_to_seconds(lap_data.get('LapStartTime'))
+            sector1_session_time = timedelta_to_seconds(lap_data.get('Sector1SessionTime'))
+            sector2_session_time = timedelta_to_seconds(lap_data.get('Sector2SessionTime'))
+            sector3_session_time = timedelta_to_seconds(lap_data.get('Sector3SessionTime'))
+            pit_in_time = timedelta_to_seconds(lap_data.get('PitInTime'))
+            pit_out_time = timedelta_to_seconds(lap_data.get('PitOutTime'))
+
+            # Get compound (tyre type)
+            compound = lap_data.get('Compound')
+            if compound and str(compound) != 'nan':
+                compound = str(compound)
+            else:
+                compound = None
+
+            # Get track status
+            track_status = lap_data.get('TrackStatus')
+            if track_status and str(track_status) != 'nan':
+                track_status = str(track_status)
+            else:
+                track_status = None
+
+            # Get deleted reason
+            deleted_reason = lap_data.get('DeletedReason')
+            if deleted_reason and str(deleted_reason) != 'nan':
+                deleted_reason = str(deleted_reason)
+            else:
+                deleted_reason = None
+
+            lap = Lap(
+                session_id=session_id,
+                driver_id=driver_id,
+                lap_number=lap_number,
+                lap_time_seconds=lap_time,
+                sector1_time_seconds=sector1_time,
+                sector2_time_seconds=sector2_time,
+                sector3_time_seconds=sector3_time,
+                lap_start_time_seconds=lap_start_time,
+                sector1_session_time_seconds=sector1_session_time,
+                sector2_session_time_seconds=sector2_session_time,
+                sector3_session_time_seconds=sector3_session_time,
+                pit_in_time_seconds=pit_in_time,
+                pit_out_time_seconds=pit_out_time,
+                stint=safe_int(lap_data.get('Stint')),
+                speed_i1=safe_float(lap_data.get('SpeedI1')),
+                speed_i2=safe_float(lap_data.get('SpeedI2')),
+                speed_fl=safe_float(lap_data.get('SpeedFL')),
+                speed_st=safe_float(lap_data.get('SpeedST')),
+                compound=compound,
+                tyre_life=safe_int(lap_data.get('TyreLife')),
+                fresh_tyre=safe_bool(lap_data.get('FreshTyre')),
+                position=safe_int(lap_data.get('Position')),
+                track_status=track_status,
+                is_personal_best=safe_bool(lap_data.get('IsPersonalBest')),
+                is_accurate=safe_bool(lap_data.get('IsAccurate')),
+                deleted=safe_bool(lap_data.get('Deleted')),
+                deleted_reason=deleted_reason,
+            )
+            db.add(lap)
+            new_laps += 1
+
+        db.commit()
+        print(f"  ✓ Added {new_laps} laps")
+
+    except Exception as e:
+        print(f"  ⚠️  Could not ingest lap data: {e}")
+        db.rollback()
+
+
+def ingest_weather_data(db, fastf1_session, session_id):
+    """
+    Ingest weather data for a session.
+
+    Args:
+        db: Database session
+        fastf1_session: FastF1 session object (already loaded with weather=True)
+        session_id: ID of the session in our database
+    """
+    try:
+        weather_data = fastf1_session.weather_data
+        if weather_data is None or len(weather_data) == 0:
+            print(f"  ⏭️  No weather data available")
+            return
+
+        print(f"  🌤️  Processing {len(weather_data)} weather readings...")
+
+        # Check if weather data already exists
+        existing_count = db.execute(
+            select(Weather).where(Weather.session_id == session_id)
+        ).scalars().all()
+
+        if len(existing_count) > 0:
+            print(f"  ✓ Weather data already exists ({len(existing_count)} readings), skipping")
+            return
+
+        new_readings = 0
+        for idx, weather_row in weather_data.iterrows():
+            # Convert Time to seconds if it's a Timedelta
+            session_time = timedelta_to_seconds(weather_row.get('Time'))
+            if session_time is None:
+                continue
+
+            weather = Weather(
+                session_id=session_id,
+                session_time_seconds=session_time,
+                air_temp=safe_float(weather_row.get('AirTemp')),
+                track_temp=safe_float(weather_row.get('TrackTemp')),
+                humidity=safe_float(weather_row.get('Humidity')),
+                pressure=safe_float(weather_row.get('Pressure')),
+                wind_speed=safe_float(weather_row.get('WindSpeed')),
+                wind_direction=safe_int(weather_row.get('WindDirection')),
+                rainfall=safe_bool(weather_row.get('Rainfall')),
+            )
+            db.add(weather)
+            new_readings += 1
+
+        db.commit()
+        print(f"  ✓ Added {new_readings} weather readings")
+
+    except Exception as e:
+        print(f"  ⚠️  Could not ingest weather data: {e}")
+        db.rollback()
+
+
+def ingest_track_status(db, fastf1_session, session_id):
+    """
+    Ingest track status changes for a session.
+
+    Args:
+        db: Database session
+        fastf1_session: FastF1 session object (already loaded with laps=True)
+        session_id: ID of the session in our database
+    """
+    try:
+        track_status_data = fastf1_session.track_status
+        if track_status_data is None or len(track_status_data) == 0:
+            print(f"  ⏭️  No track status data available")
+            return
+
+        print(f"  🚦 Processing {len(track_status_data)} track status changes...")
+
+        # Check if track status data already exists
+        existing_count = db.execute(
+            select(TrackStatus).where(TrackStatus.session_id == session_id)
+        ).scalars().all()
+
+        if len(existing_count) > 0:
+            print(f"  ✓ Track status data already exists ({len(existing_count)} changes), skipping")
+            return
+
+        new_statuses = 0
+        for idx, status_row in track_status_data.iterrows():
+            # Convert Time to seconds
+            session_time = timedelta_to_seconds(status_row.get('Time'))
+            if session_time is None:
+                continue
+
+            # Get status code
+            status = status_row.get('Status')
+            if status and str(status) != 'nan':
+                status = str(status)
+            else:
+                continue  # Skip if no status
+
+            # Get message
+            message = status_row.get('Message')
+            if message and str(message) != 'nan':
+                message = str(message)
+            else:
+                message = None
+
+            track_status = TrackStatus(
+                session_id=session_id,
+                session_time_seconds=session_time,
+                status=status,
+                message=message,
+            )
+            db.add(track_status)
+            new_statuses += 1
+
+        db.commit()
+        print(f"  ✓ Added {new_statuses} track status changes")
+
+    except Exception as e:
+        print(f"  ⚠️  Could not ingest track status data: {e}")
+        db.rollback()
+
+
+def ingest_race_control_messages(db, fastf1_session, session_id):
+    """
+    Ingest race control messages for a session.
+
+    Args:
+        db: Database session
+        fastf1_session: FastF1 session object (already loaded with messages=True)
+        session_id: ID of the session in our database
+    """
+    try:
+        messages_data = fastf1_session.race_control_messages
+        if messages_data is None or len(messages_data) == 0:
+            print(f"  ⏭️  No race control messages available")
+            return
+
+        print(f"  📋 Processing {len(messages_data)} race control messages...")
+
+        # Check if messages already exist
+        existing_count = db.execute(
+            select(RaceControlMessage).where(RaceControlMessage.session_id == session_id)
+        ).scalars().all()
+
+        if len(existing_count) > 0:
+            print(f"  ✓ Race control messages already exist ({len(existing_count)} messages), skipping")
+            return
+
+        # Get session start time (needed because race control messages use absolute datetime)
+        # FastF1 uses 't0_date' as the reference timestamp
+        session_start = fastf1_session.t0_date if hasattr(fastf1_session, 't0_date') else None
+
+        new_messages = 0
+        for idx, msg_row in messages_data.iterrows():
+            # Convert Time to seconds (handles both datetime and Timedelta)
+            session_time = datetime_or_timedelta_to_seconds(msg_row.get('Time'), session_start)
+            if session_time is None:
+                continue
+
+            # Get message text
+            message = msg_row.get('Message')
+            if not message or str(message) == 'nan':
+                continue  # Skip if no message
+
+            # Get category
+            category = msg_row.get('Category')
+            if category and str(category) != 'nan':
+                category = str(category)
+            else:
+                category = None
+
+            # Get status
+            status = msg_row.get('Status')
+            if status and str(status) != 'nan':
+                status = str(status)
+            else:
+                status = None
+
+            # Get flag
+            flag = msg_row.get('Flag')
+            if flag and str(flag) != 'nan':
+                flag = str(flag)
+            else:
+                flag = None
+
+            # Get scope
+            scope = msg_row.get('Scope')
+            if scope and str(scope) != 'nan':
+                scope = str(scope)
+            else:
+                scope = None
+
+            race_control_msg = RaceControlMessage(
+                session_id=session_id,
+                session_time_seconds=session_time,
+                category=category,
+                message=str(message),
+                status=status,
+                driver_number=safe_int(msg_row.get('RacingNumber')),
+                flag=flag,
+                scope=scope,
+                sector=safe_int(msg_row.get('Sector')),
+                lap_number=safe_int(msg_row.get('Lap')),
+            )
+            db.add(race_control_msg)
+            new_messages += 1
+
+        db.commit()
+        print(f"  ✓ Added {new_messages} race control messages")
+
+    except Exception as e:
+        print(f"  ⚠️  Could not ingest race control messages: {e}")
+        db.rollback()
+
+
 def check_session_in_db(db, year, round_num, session_type_name):
     """
-    Check if session and its results already exist in database.
+    Check if session and its data already exist in database.
+
+    Checks for all data types: results, laps, weather, track status, race control messages.
 
     Args:
         db: Database session
@@ -446,7 +830,7 @@ def check_session_in_db(db, year, round_num, session_type_name):
         session_type_name: Our session type ('race', 'qualifying', 'sprint_race', 'sprint_qualifying')
 
     Returns:
-        tuple: (session_exists: bool, has_results: bool, session_id: int or None)
+        tuple: (session_exists, has_results, has_laps, has_weather, has_track_status, has_messages, session_id)
     """
     # Check if session exists
     existing_session = db.execute(
@@ -458,18 +842,32 @@ def check_session_in_db(db, year, round_num, session_type_name):
     ).scalar_one_or_none()
 
     if not existing_session:
-        return False, False, None
+        return False, False, False, False, False, False, None
 
-    # Session exists - check if it has results
-    result_count = db.execute(
-        select(SessionResult).where(
-            SessionResult.session_id == existing_session.id
-        )
-    ).scalars().all()
+    session_id = existing_session.id
 
-    has_results = len(result_count) > 0
+    # Check if each data type exists
+    has_results = len(db.execute(
+        select(SessionResult).where(SessionResult.session_id == session_id)
+    ).scalars().all()) > 0
 
-    return True, has_results, existing_session.id
+    has_laps = len(db.execute(
+        select(Lap).where(Lap.session_id == session_id)
+    ).scalars().all()) > 0
+
+    has_weather = len(db.execute(
+        select(Weather).where(Weather.session_id == session_id)
+    ).scalars().all()) > 0
+
+    has_track_status = len(db.execute(
+        select(TrackStatus).where(TrackStatus.session_id == session_id)
+    ).scalars().all()) > 0
+
+    has_messages = len(db.execute(
+        select(RaceControlMessage).where(RaceControlMessage.session_id == session_id)
+    ).scalars().all()) > 0
+
+    return True, has_results, has_laps, has_weather, has_track_status, has_messages, session_id
 
 
 def ingest_session(db, year, round_num, event, session_type_name, fastf1_session_name, strict_mode=False):
@@ -477,6 +875,7 @@ def ingest_session(db, year, round_num, event, session_type_name, fastf1_session
     Ingest a single session (race, qualifying, sprint, etc.).
 
     IMPORTANT: Checks database FIRST before loading from FastF1 to avoid unnecessary API calls.
+    Checks each data type independently and only ingests what's missing.
 
     Args:
         db: Database session
@@ -490,15 +889,54 @@ def ingest_session(db, year, round_num, event, session_type_name, fastf1_session
     Returns:
         bool: True if successful, False if failed/skipped
     """
-    # STEP 1: Check if data already exists in database
-    session_exists, has_results, session_id = check_session_in_db(db, year, round_num, session_type_name)
+    # STEP 1: Check what data already exists in database
+    session_exists, has_results, has_laps, has_weather, has_track_status, has_messages, session_id = check_session_in_db(
+        db, year, round_num, session_type_name
+    )
 
-    if session_exists and has_results:
-        print(f"  ✓ Session and results already exist in database, skipping FastF1 load")
-        return True  # Success - already have the data
+    # Determine if we need to load anything from FastF1
+    needs_results = not has_results
+    needs_laps = not has_laps
+    needs_weather = not has_weather
+    needs_track_status = not has_track_status
+    needs_messages = not has_messages
 
-    if session_exists and not has_results:
-        print(f"  ⚠️  Session exists but has no results, will reload from FastF1")
+    # If everything exists, skip entirely
+    if session_exists and has_results and has_laps and has_weather and has_track_status and has_messages:
+        print(f"  ✓ All data already in database, skipping")
+        return True
+
+    # Report what exists
+    if session_exists:
+        existing_data = []
+        if has_results:
+            existing_data.append("results")
+        if has_laps:
+            existing_data.append("laps")
+        if has_weather:
+            existing_data.append("weather")
+        if has_track_status:
+            existing_data.append("track status")
+        if has_messages:
+            existing_data.append("messages")
+
+        if existing_data:
+            print(f"  ✓ Existing data: {', '.join(existing_data)}")
+
+        missing_data = []
+        if needs_results:
+            missing_data.append("results")
+        if needs_laps:
+            missing_data.append("laps")
+        if needs_weather:
+            missing_data.append("weather")
+        if needs_track_status:
+            missing_data.append("track status")
+        if needs_messages:
+            missing_data.append("messages")
+
+        if missing_data:
+            print(f"  📥 Will ingest: {', '.join(missing_data)}")
 
     # STEP 2: Ingest circuit (fast database operation)
     circuit_id = ingest_circuit(db, event)
@@ -516,21 +954,33 @@ def ingest_session(db, year, round_num, event, session_type_name, fastf1_session
         # STEP 4: Create/update session metadata if needed
         if not session_exists:
             session_date = fastf1_sess.date if hasattr(fastf1_sess, 'date') else event.get("EventDate")
-            session_id, should_process = ingest_session_metadata(
+            session_id, _ = ingest_session_metadata(
                 db, event, circuit_id, year, session_type_name, session_date
             )
-        else:
-            # Session exists but had no results
-            should_process = True
 
-        # STEP 5: Ingest results
-        if should_process:
+        # STEP 5: Ingest results (only if needed)
+        if needs_results:
             if session_type_name in ['race', 'sprint_race']:
                 ingest_race_results(db, fastf1_sess, session_id, year)
             elif session_type_name in ['qualifying', 'sprint_qualifying']:
                 ingest_qualifying_results(db, fastf1_sess, session_id, year)
-        else:
-            print(f"  ⏭️  Results already exist, skipping")
+
+        # STEP 6: Ingest additional data (only what's needed)
+        # Each function has its own DB check, but we can skip the call entirely if data exists
+        if needs_laps or needs_weather or needs_track_status or needs_messages:
+            print(f"\n  📥 Ingesting additional session data...")
+
+        if needs_laps:
+            ingest_lap_data(db, fastf1_sess, session_id)
+
+        if needs_weather:
+            ingest_weather_data(db, fastf1_sess, session_id)
+
+        if needs_track_status:
+            ingest_track_status(db, fastf1_sess, session_id)
+
+        if needs_messages:
+            ingest_race_control_messages(db, fastf1_sess, session_id)
 
         return True
 
@@ -617,15 +1067,17 @@ def ingest_season(season_year, session_types=None, strict_mode=False):
 
                 stats['total_sessions_attempted'] += 1
 
-                # Check if already exists BEFORE calling ingest_session
-                session_exists, has_results, _ = check_session_in_db(db, season_year, round_num, session_type)
+                # Check what data already exists
+                (session_exists, has_results, has_laps, has_weather,
+                 has_track_status, has_messages, _) = check_session_in_db(db, season_year, round_num, session_type)
 
-                if session_exists and has_results:
-                    # Quick check - data already in DB, don't even try to load
-                    print(f"  ✓ Already in database")
+                # If ALL data exists, skip entirely
+                if session_exists and has_results and has_laps and has_weather and has_track_status and has_messages:
+                    print(f"  ✓ All data already in database")
                     stats['already_exists'] += 1
                     continue
 
+                # Otherwise, call ingest_session which will handle partial data
                 try:
                     success = ingest_session(
                         db, season_year, round_num, event,

@@ -47,6 +47,10 @@ class Session(Base):
     # Relationships
     circuit = relationship("Circuit", back_populates="sessions")
     results = relationship("SessionResult", back_populates="session", cascade="all, delete-orphan")
+    laps = relationship("Lap", back_populates="session", cascade="all, delete-orphan")
+    weather_data = relationship("Weather", back_populates="session", cascade="all, delete-orphan")
+    track_status = relationship("TrackStatus", back_populates="session", cascade="all, delete-orphan")
+    race_control_messages = relationship("RaceControlMessage", back_populates="session", cascade="all, delete-orphan")
 
     # Constraints
     __table_args__ = (

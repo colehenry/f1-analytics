@@ -33,6 +33,7 @@ class Driver(Base):
     # This creates a "virtual" attribute: driver.session_results
     # It allows you to do: driver.session_results to get all results for this driver
     session_results = relationship("SessionResult", back_populates="driver")
+    laps = relationship("Lap", back_populates="driver")
 
     def __repr__(self):
         """String representation for debugging"""
