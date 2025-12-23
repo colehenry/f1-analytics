@@ -14,6 +14,7 @@ import math
 
 from app.database import get_db
 from app.models import Session, SessionResult, Driver, Team, Circuit, Lap
+from app.security import verify_api_key
 
 
 def sanitize_float(value: Optional[float]) -> Optional[float]:
@@ -44,7 +45,10 @@ router = APIRouter()
 
 
 @router.get("/seasons", response_model=List[int])
-async def get_available_seasons(db: AsyncSession = Depends(get_db)):
+async def get_available_seasons(
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)
+):
     """
     Get all available seasons/years that have session data.
 
@@ -64,7 +68,11 @@ async def get_available_seasons(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{season}/standings", response_model=StandingsResponse)
-async def get_season_standings(season: int, db: AsyncSession = Depends(get_db)):
+async def get_season_standings(
+    season: int,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)
+):
     """
     Get driver and constructor championship standings for a season.
 
@@ -162,7 +170,8 @@ async def get_season_standings(season: int, db: AsyncSession = Depends(get_db)):
 async def get_points_progression(
     season: int,
     mode: str = "drivers",
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Get cumulative points progression throughout a season.
@@ -403,7 +412,11 @@ async def get_points_progression(
 
 
 @router.get("/{season}", response_model=SeasonRoundsResponse)
-async def get_season_rounds(season: int, db: AsyncSession = Depends(get_db)):
+async def get_season_rounds(
+    season: int,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)
+):
     """
     Get all rounds for a season with top 3 finishers for each.
 
@@ -482,7 +495,10 @@ async def get_season_rounds(season: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{season}/{round}/sprint", response_model=SessionResultsResponse)
 async def get_sprint_details(
-    season: int, round: int, db: AsyncSession = Depends(get_db)
+    season: int,
+    round: int,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Get full results for a specific sprint race.
@@ -580,7 +596,10 @@ async def get_sprint_details(
 
 @router.get("/{season}/{round}", response_model=SessionResultsResponse)
 async def get_round_details(
-    season: int, round: int, db: AsyncSession = Depends(get_db)
+    season: int,
+    round: int,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Get full results for a specific round (main race).
@@ -678,7 +697,10 @@ async def get_round_details(
 
 @router.get("/{season}/{round}/lap-times", response_model=LapTimesResponse)
 async def get_lap_times(
-    season: int, round: int, db: AsyncSession = Depends(get_db)
+    season: int,
+    round: int,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Get lap-by-lap timing data for all drivers in a specific race.

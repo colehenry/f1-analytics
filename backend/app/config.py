@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     debug: bool = False
     secret_key: str
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    lapwise_api_key: str
 
     # FastF1
     fastf1_cache_dir: str = "./cache"
