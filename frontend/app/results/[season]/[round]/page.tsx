@@ -74,6 +74,7 @@ export default function RoundDetailPage() {
           apiUrl(`/api/results/${season}/${round}`),
           {
             cache: "no-store",
+            headers: apiHeaders(),
           },
         );
         const sessionData = await response.json();

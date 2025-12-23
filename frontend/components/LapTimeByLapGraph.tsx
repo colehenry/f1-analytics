@@ -222,6 +222,7 @@ export default function LapTimeByLapGraph({
 					apiUrl(`/api/results/${season}/${round}/lap-times`),
 					{
 						cache: "no-store",
+					headers: apiHeaders(),
 					},
 				);
 				const lapTimesData = await response.json();

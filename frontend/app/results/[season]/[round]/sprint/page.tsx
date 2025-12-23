@@ -74,6 +74,7 @@ export default function SprintDetailPage() {
           apiUrl(`/api/results/${season}/${round}/sprint`),
           {
             cache: "no-store",
+            headers: apiHeaders(),
           },
         );
         const sessionData = await response.json();

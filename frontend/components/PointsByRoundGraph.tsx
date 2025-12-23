@@ -165,6 +165,7 @@ export default function PointsByRoundGraph({
 					apiUrl(`/api/results/${season}/points-progression?mode=${mode}`),
 					{
 						cache: "no-store",
+					headers: apiHeaders(),
 					},
 				);
 				const progressionData = await response.json();
