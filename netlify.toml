@@ -2,3 +2,7 @@
   base = "frontend"
   command = "npm run build"
   publish = ".next"
+  environment = { NEXT_PUBLIC_API_URL = "https://f1-analytics-production-b1bf.up.railway.app" }
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
