@@ -1,4 +1,4 @@
-# Docker Compose Configuration for F1 Analytics
+# Docker Compose Configuration for Lapwise
 # This file defines how to run PostgreSQL in a Docker container
 
 # What is docker-compose.yml?
@@ -96,7 +96,7 @@ volumes:
 
 # Networks: Define custom networks
 networks:
-  # Custom network for F1 Analytics services
+  # Custom network for lapwise.dev services
   # Future containers (backend, Redis, etc.) can join this network
   f1-network:
     driver: bridge  # Default network type

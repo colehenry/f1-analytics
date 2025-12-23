@@ -1,4 +1,4 @@
-# F1 Analytics API
+# Lapwise API
 
 FastAPI backend for Formula 1 race data, telemetry, and historical statistics. Provides a RESTful API for querying F1 session results, driver/constructor standings, and points progressions.
 

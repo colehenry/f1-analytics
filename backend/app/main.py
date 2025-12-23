@@ -5,8 +5,8 @@ from app.config import settings
 
 # Create the FastAPI application
 app = FastAPI(
-    title="F1 Analytics API",
-    description="API for Formula 1 telemetry, race data, and historical statistics",
+    title="lapwise.dev api",
+    description="API for F1 telemetry, race result data, and historical statistics",
     version="0.1.0",
     debug=settings.debug,
 )
@@ -28,7 +28,7 @@ async def root():
     Root endpoint - Returns basic API information.
     """
     return {
-        "message": "F1 Analytics API",
+        "message": "lapwise.dev api",
         "status": "running",
         "version": "0.1.0",
     }
