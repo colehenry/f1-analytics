@@ -63,7 +63,7 @@ App will be available at http://localhost:3000
 ## Project Structure
 
 ```
-f1-analytics/
+lapwise.dev/
 ├── frontend/          # Next.js app
 │   ├── app/          # Pages and routing
 │   ├── components/   # React components
