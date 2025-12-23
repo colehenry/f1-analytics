@@ -10,7 +10,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, apiHeaders } from "@/lib/api";
 
 // Type definitions
 type LapData = {

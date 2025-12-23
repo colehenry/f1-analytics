@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, apiHeaders } from "@/lib/api";
 
 async function getLatestSeason(): Promise<number> {
   const res = await fetch(apiUrl("/api/results/seasons"), {
+        headers: apiHeaders(),
     cache: "no-store",
   });
 

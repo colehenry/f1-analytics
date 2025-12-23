@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import PointsByRoundGraph from "@/components/PointsByRoundGraph";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, apiHeaders } from "@/lib/api";
 
 // Type definitions matching our API responses
 type DriverStanding = {
@@ -70,6 +70,7 @@ export default function ResultsPage() {
       try {
         const response = await fetch(apiUrl("/api/results/seasons"), {
           cache: "no-store",
+          headers: apiHeaders(),
         });
         const years = await response.json();
         setAvailableYears(years);
@@ -93,9 +94,11 @@ export default function ResultsPage() {
         const [standingsRes, roundsRes] = await Promise.all([
           fetch(apiUrl(`/api/results/${season}/standings`), {
             cache: "no-store",
+            headers: apiHeaders(),
           }),
           fetch(apiUrl(`/api/results/${season}`), {
             cache: "no-store",
+            headers: apiHeaders(),
           }),
         ]);
 

@@ -7,6 +7,7 @@
 
 const API_BASE_URL =
 	process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
 /**
  * Constructs a full API URL from a path
@@ -24,4 +25,20 @@ export const apiUrl = (path: string): string => {
 	// Ensure path starts with /
 	const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 	return `${API_BASE_URL}${normalizedPath}`;
+};
+
+/**
+ * Returns headers object with API key for authenticated requests
+ *
+ * @returns Headers object with X-API-Key header
+ *
+ * @example
+ * ```ts
+ * fetch(apiUrl("/api/results/seasons"), { headers: apiHeaders() })
+ * ```
+ */
+export const apiHeaders = (): HeadersInit => {
+	return {
+		"X-API-Key": API_KEY,
+	};
 };
