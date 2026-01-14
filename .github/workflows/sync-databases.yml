@@ -20,6 +20,8 @@ jobs:
           echo "Dumping production database..."
           pg_dump "$PROD_DATABASE_URL" --clean --if-exists --no-owner --no-acl -f prod_dump.sql
           echo "Production dump complete ($(wc -l < prod_dump.sql) lines)"
+          echo "First 50 lines of dump:"
+          head -50 prod_dump.sql
 
       - name: Restore to dev database
         env:
@@ -27,8 +29,10 @@ jobs:
         run: |
           echo "Restoring data to dev database..."
           echo "This will drop existing tables and recreate them with production data"
-          psql "$DEV_DATABASE_URL" -f prod_dump.sql
+          psql "$DEV_DATABASE_URL" -f prod_dump.sql 2>&1 | tee restore_output.log
           echo "Restore complete"
+          echo "Restore output:"
+          cat restore_output.log
 
       - name: Verify sync
         env:
