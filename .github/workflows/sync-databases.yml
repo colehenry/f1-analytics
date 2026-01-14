@@ -1,27 +1,13 @@
 name: Sync Production to Dev Database
 
 on:
-  # Manual trigger with a button in GitHub Actions UI
   workflow_dispatch:
-    inputs:
-      confirmation:
-        description: 'Type "SYNC" to confirm you want to copy production data to dev'
-        required: true
-        default: ''
 
 jobs:
   sync-databases:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Validate confirmation
-        run: |
-          if [ "${{ github.event.inputs.confirmation }}" != "SYNC" ]; then
-            echo "❌ Confirmation failed. You must type 'SYNC' to proceed."
-            exit 1
-          fi
-          echo "✅ Confirmation received. Proceeding with database sync..."
-
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
@@ -31,31 +17,24 @@ jobs:
         env:
           PROD_DATABASE_URL: ${{ secrets.NEON_PROD_DATABASE_URL }}
         run: |
-          echo "📦 Dumping production database..."
-          pg_dump "$PROD_DATABASE_URL" --no-owner --no-acl -f prod_dump.sql
-          echo "✅ Production dump complete ($(wc -l < prod_dump.sql) lines)"
-
-      - name: Clear dev database
-        env:
-          DEV_DATABASE_URL: ${{ secrets.NEON_DEV_DATABASE_URL }}
-        run: |
-          echo "🗑️  Clearing dev database..."
-          psql "$DEV_DATABASE_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-          echo "✅ Dev database cleared"
+          echo "Dumping production database..."
+          pg_dump "$PROD_DATABASE_URL" --clean --if-exists --no-owner --no-acl -f prod_dump.sql
+          echo "Production dump complete ($(wc -l < prod_dump.sql) lines)"
 
       - name: Restore to dev database
         env:
           DEV_DATABASE_URL: ${{ secrets.NEON_DEV_DATABASE_URL }}
         run: |
-          echo "📥 Restoring data to dev database..."
+          echo "Restoring data to dev database..."
+          echo "This will drop existing tables and recreate them with production data"
           psql "$DEV_DATABASE_URL" -f prod_dump.sql
-          echo "✅ Restore complete"
+          echo "Restore complete"
 
       - name: Verify sync
         env:
           DEV_DATABASE_URL: ${{ secrets.NEON_DEV_DATABASE_URL }}
         run: |
-          echo "🔍 Verifying data..."
+          echo "Verifying data..."
           echo "Tables in dev database:"
           psql "$DEV_DATABASE_URL" -c "\dt"
           echo ""
@@ -67,6 +46,5 @@ jobs:
 
       - name: Summary
         run: |
-          echo "✅ Database sync complete!"
-          echo "Production data has been copied to dev database."
-          echo "You can now use your dev database for local development."
+          echo "Database sync complete"
+          echo "Production data has been copied to dev database"
