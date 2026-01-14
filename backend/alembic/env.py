@@ -20,7 +20,9 @@ config = context.config
 # Set the database URL from our .env file (via settings)
 # This overrides the sqlalchemy.url in alembic.ini
 # Note: Alembic uses synchronous SQLAlchemy, so we need to convert async URL
+# Also convert asyncpg's ssl=require to psycopg2's sslmode=require
 database_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+database_url = database_url.replace("?ssl=require", "?sslmode=require")
 config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.

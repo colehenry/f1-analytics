@@ -1,4 +1,4 @@
-# F1 Analytics - Git Ignore File
+# lapwise.dev - Git Ignore File
 # This file tells git which files/folders to NOT track in version control
 
 .claude/

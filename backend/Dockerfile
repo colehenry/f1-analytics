@@ -1,4 +1,4 @@
-# F1 Analytics Backend - Production Dockerfile
+# lapwise.dev Backend - Production Dockerfile
 # Multi-stage build for optimal image size
 
 # ============================================================================
